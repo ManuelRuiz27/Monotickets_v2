@@ -2,12 +2,663 @@ openapi: 3.1.0
 info:
   title: Monotickets API
   version: 1.0.0
-  description: >
+  description: >-
     API para autenticación, gestión de usuarios, eventos, venues, checkpoints,
-    invitados, tickets 1–N, QRs, escaneo (online/offline), importaciones y notificaciones.
+    invitados, tickets 1–N, QRs, escaneo (online/offline), importaciones y
+    notificaciones.
 servers:
   - url: https://api.monotickets.app/v1
 security:
   - bearerAuth: []
     tenantHeader: []
-... (contenido truncado para brevedad en el editor, pero debe contener todo el YAML completo generado arriba) ...
+paths:
+  /auth/login:
+    post:
+      summary: Inicia sesión y obtiene tokens de acceso y refresh.
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthLoginRequest'
+            examples:
+              credenciales-validas:
+                summary: Credenciales válidas
+                value:
+                  email: admin@monotickets.app
+                  password: "p4ssw0rdSeguro"
+      responses:
+        '200':
+          description: Tokens emitidos correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenPairResponse'
+              examples:
+                respuesta-exitosa:
+                  summary: Tokens emitidos
+                  value:
+                    access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+                    token_type: Bearer
+                    expires_in: 900
+                    refresh_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+                    refresh_expires_in: 3600
+                    session_id: 01HZYME6EBF1G01PZ8C6E6CBR3
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /auth/logout:
+    post:
+      summary: Cierra sesión e invalida el token actual.
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+          tenantHeader: []
+      responses:
+        '200':
+          description: Sesión cerrada correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /auth/refresh:
+    post:
+      summary: Refresca un token de acceso utilizando un refresh token válido.
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRefreshRequest'
+            examples:
+              refresh-token:
+                summary: Refresh token válido
+                value:
+                  refresh_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+      responses:
+        '200':
+          description: Nuevo par de tokens generado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenPairResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /auth/forgot-password:
+    post:
+      summary: Inicia el proceso de recuperación de contraseña.
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthForgotPasswordRequest'
+            examples:
+              solicitud-reset:
+                summary: Solicitud de restablecimiento
+                value:
+                  email: user@monotickets.app
+      responses:
+        '200':
+          description: Se envió la notificación de recuperación (si existe el correo).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+                    example: If the email exists, a reset link has been sent.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /auth/reset-password:
+    post:
+      summary: Restablece la contraseña usando un token válido.
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthResetPasswordRequest'
+            examples:
+              restablecer:
+                summary: Restablecer contraseña
+                value:
+                  email: user@monotickets.app
+                  token: 5c8f5646c0d44a789f1f7e4c8fe31234abcd1234abcd1234abcd1234abcd1234
+                  password: NuevaContraseñaSegura1!
+                  password_confirmation: NuevaContraseñaSegura1!
+      responses:
+        '200':
+          description: Contraseña restablecida correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+                    example: Password has been reset successfully.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /users:
+    get:
+      summary: Lista paginada de usuarios.
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeaderOptional'
+        - $ref: '#/components/parameters/UserRoleFilter'
+        - $ref: '#/components/parameters/UserIsActiveFilter'
+        - $ref: '#/components/parameters/UserSearchFilter'
+        - $ref: '#/components/parameters/UserSortFilter'
+        - $ref: '#/components/parameters/UserPerPageFilter'
+      responses:
+        '200':
+          description: Colección paginada de usuarios.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPaginatedResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    post:
+      summary: Crea un nuevo usuario.
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeaderOptional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserStoreRequest'
+            examples:
+              crear-organizer:
+                summary: Crear organizador
+                value:
+                  name: Ana Pérez
+                  email: ana.perez@monotickets.app
+                  phone: '+5491122334455'
+                  password: ContraseñaUltraSegura1!
+                  is_active: true
+                  roles: ['organizer']
+                  tenant_id: 01HZYME6EBF1G01PZ8C6E6CBR3
+      responses:
+        '201':
+          description: Usuario creado correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSingleResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantHeaderOptional'
+      - name: userId
+        in: path
+        required: true
+        description: Identificador ULID del usuario.
+        schema:
+          type: string
+          pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+    get:
+      summary: Obtiene el detalle de un usuario.
+      tags: [Users]
+      responses:
+        '200':
+          description: Usuario encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSingleResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      summary: Actualiza un usuario existente.
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+            examples:
+              actualizar-roles:
+                summary: Actualizar roles y estado
+                value:
+                  roles: ['hostess']
+                  is_active: false
+      responses:
+        '200':
+          description: Usuario actualizado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSingleResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      summary: Elimina (soft delete) un usuario.
+      tags: [Users]
+      responses:
+        '204':
+          description: Usuario eliminado.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'Envíe el token de acceso vigente en el header Authorization: Bearer <token>.'
+    tenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-ID
+      description: >-
+        Identificador del tenant. Obligatorio para usuarios no superadmin y para
+        operaciones con alcance multi-tenant.
+  parameters:
+    TenantHeaderOptional:
+      name: X-Tenant-ID
+      in: header
+      required: false
+      description: >-
+        Identificador del tenant activo. Requerido para usuarios que no sean
+        superadmin y para operaciones multi-tenant.
+      schema:
+        type: string
+    UserRoleFilter:
+      name: role
+      in: query
+      required: false
+      description: Filtra por rol asignado.
+      schema:
+        type: string
+        enum: [superadmin, organizer, hostess]
+    UserIsActiveFilter:
+      name: is_active
+      in: query
+      required: false
+      description: Filtra por estado activo.
+      schema:
+        type: boolean
+    UserSearchFilter:
+      name: search
+      in: query
+      required: false
+      description: Texto libre para buscar por nombre o email.
+      schema:
+        type: string
+        maxLength: 255
+    UserSortFilter:
+      name: sort
+      in: query
+      required: false
+      description: Campo y dirección de ordenamiento.
+      schema:
+        type: string
+        enum: [name, -name, created_at, -created_at]
+    UserPerPageFilter:
+      name: per_page
+      in: query
+      required: false
+      description: Cantidad de resultados por página (1-100).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: UNAUTHORIZED
+            message:
+              type: string
+              example: Invalid email or password.
+            details:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+              description: Detalle opcional de errores de validación.
+    AuthLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          format: password
+          minLength: 12
+    AuthRefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    AuthForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+    AuthResetPasswordRequest:
+      type: object
+      required: [email, token, password, password_confirmation]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        token:
+          type: string
+          description: Token plano recibido por email.
+          minLength: 64
+          maxLength: 64
+        password:
+          type: string
+          format: password
+          minLength: 12
+        password_confirmation:
+          type: string
+          format: password
+          minLength: 12
+    AuthTokenPairResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - refresh_token
+        - refresh_expires_in
+        - session_id
+      properties:
+        access_token:
+          type: string
+          description: Token de acceso JWT.
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Expiración del access token en segundos.
+          example: 900
+        refresh_token:
+          type: string
+          description: Token JWT de refresco asociado a la sesión.
+        refresh_expires_in:
+          type: integer
+          description: Expiración del refresh token en segundos.
+          example: 3600
+        session_id:
+          type: string
+          description: Identificador ULID de la sesión asociada.
+    UserRole:
+      type: object
+      required: [id, code, name]
+      properties:
+        id:
+          type: string
+          description: Identificador ULID del rol.
+        code:
+          type: string
+          enum: [superadmin, organizer, hostess]
+        name:
+          type: string
+        tenant_id:
+          type: string
+          nullable: true
+          description: Tenant asociado al rol (null para superadmin).
+    UserResource:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - name
+        - email
+        - is_active
+        - roles
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Identificador ULID del usuario.
+        tenant_id:
+          type: string
+          nullable: true
+          description: Tenant asociado al usuario.
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserRole'
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    UserPaginatedResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResource'
+        meta:
+          type: object
+          required: [page, per_page, total, total_pages]
+          properties:
+            page:
+              type: integer
+            per_page:
+              type: integer
+            total:
+              type: integer
+            total_pages:
+              type: integer
+    UserSingleResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/UserResource'
+    UserStoreRequest:
+      type: object
+      required: [name, email, password, roles]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        phone:
+          type: string
+          nullable: true
+          maxLength: 50
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 255
+        is_active:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [superadmin, organizer, hostess]
+        tenant_id:
+          type: string
+          nullable: true
+          description: Tenant ULID requerido para roles distintos de superadmin.
+    UserUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          nullable: true
+          maxLength: 50
+        is_active:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [superadmin, organizer, hostess]
+  responses:
+    UnauthorizedError:
+      description: Autenticación requerida o token inválido.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            token-invalido:
+              summary: Token inválido
+              value:
+                error:
+                  code: UNAUTHORIZED
+                  message: Invalid token provided.
+    ForbiddenError:
+      description: El usuario autenticado no tiene permisos suficientes.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            sin-permisos:
+              summary: Acceso denegado
+              value:
+                error:
+                  code: FORBIDDEN
+                  message: This action is unauthorised.
+    NotFoundError:
+      description: Recurso no encontrado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            no-encontrado:
+              summary: Usuario inexistente
+              value:
+                error:
+                  code: NOT_FOUND
+                  message: The requested resource was not found.
+    ConflictError:
+      description: Conflicto de datos (por ejemplo, email duplicado).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            email-duplicado:
+              summary: Email duplicado
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: The given data was invalid.
+                  details:
+                    email:
+                      - The email has already been taken.
+    ValidationError:
+      description: Datos inválidos en la solicitud.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            campos-invalidos:
+              summary: Campos inválidos
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: The given data was invalid.
+                  details:
+                    email:
+                      - The email field must be a valid email address.
+                    password:
+                      - The password field must be at least 12 characters.
