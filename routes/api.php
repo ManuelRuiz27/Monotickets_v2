@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\RefreshTokenController;
+use App\Http\Middleware\EnsureTenantHeader;
 
 /*
 |--------------------------------------------------------------------------
@@ -16,14 +17,18 @@ use App\Http\Controllers\Auth\RefreshTokenController;
 */
 
 Route::middleware('api')->group(function (): void {
-    Route::post('/auth/login', [LoginController::class, 'login'])->name('auth.login');
+    Route::prefix('auth')
+        ->withoutMiddleware([EnsureTenantHeader::class])
+        ->group(function (): void {
+            Route::post('login', [LoginController::class, 'login'])->name('auth.login');
 
-    Route::middleware(['auth:api', 'role:superadmin,organizer,hostess'])->group(function (): void {
-        Route::post('/auth/logout', [LogoutController::class, 'logout'])->name('auth.logout');
-    });
+            Route::middleware(['auth:api', 'role:superadmin,organizer,hostess'])->group(function (): void {
+                Route::post('logout', [LogoutController::class, 'logout'])->name('auth.logout');
+            });
 
-    Route::post('/auth/refresh', [RefreshTokenController::class, 'refresh'])->name('auth.refresh');
+            Route::post('refresh', [RefreshTokenController::class, 'refresh'])->name('auth.refresh');
 
-    Route::post('/auth/forgot-password', [PasswordController::class, 'forgot'])->name('auth.forgot-password');
-    Route::post('/auth/reset-password', [PasswordController::class, 'reset'])->name('auth.reset-password');
+            Route::post('forgot-password', [PasswordController::class, 'forgot'])->name('auth.forgot-password');
+            Route::post('reset-password', [PasswordController::class, 'reset'])->name('auth.reset-password');
+        });
 });
