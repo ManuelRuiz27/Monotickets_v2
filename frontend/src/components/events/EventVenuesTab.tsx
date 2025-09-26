@@ -10,6 +10,7 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  Link,
   Paper,
   Stack,
   Table,
@@ -26,9 +27,11 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import { Link as RouterLink } from 'react-router-dom';
 import type { VenueResource, VenuePayload } from '../../hooks/useVenuesApi';
 import { useCreateVenue, useDeleteVenue, useEventVenues, useUpdateVenue } from '../../hooks/useVenuesApi';
-import { extractApiErrorMessage } from '../../hooks/useEventsApi';
+import { extractApiErrorMessage } from '../../utils/apiErrors';
 
 interface EventVenuesTabProps {
   eventId: string;
@@ -141,7 +144,7 @@ const EventVenuesTab = ({ eventId }: EventVenuesTabProps) => {
     lng: state.lng.trim() ? Number(state.lng) : null,
   });
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLDivElement>) => {
     event.preventDefault();
     setFormError(null);
     const errors = validate(formState);
@@ -228,10 +231,17 @@ const EventVenuesTab = ({ eventId }: EventVenuesTabProps) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {venues.map((venue) => (
+                  {venues.map((venue: VenueResource) => (
                     <TableRow key={venue.id} hover>
                       <TableCell>
-                        <Typography variant="subtitle2">{venue.name}</Typography>
+                        <Link
+                          component={RouterLink}
+                          to={`/events/${eventId}/venues/${venue.id}`}
+                          underline="hover"
+                          variant="subtitle2"
+                        >
+                          {venue.name}
+                        </Link>
                         <Typography variant="caption" color="text.secondary">
                           ID: {venue.id}
                         </Typography>
@@ -240,6 +250,17 @@ const EventVenuesTab = ({ eventId }: EventVenuesTabProps) => {
                       <TableCell>{venue.lat ?? '—'}</TableCell>
                       <TableCell>{venue.lng ?? '—'}</TableCell>
                       <TableCell align="right">
+                        <Tooltip title="Ver checkpoints">
+                          <span>
+                            <IconButton
+                              size="small"
+                              component={RouterLink}
+                              to={`/events/${eventId}/venues/${venue.id}`}
+                            >
+                              <PlaylistAddCheckIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                         <Tooltip title="Editar">
                           <span>
                             <IconButton size="small" onClick={() => handleOpenEdit(venue)}>

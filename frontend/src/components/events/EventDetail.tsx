@@ -16,7 +16,8 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { DateTime } from 'luxon';
 import { useNavigate } from 'react-router-dom';
-import { CHECKIN_POLICY_LABELS, EVENT_STATUS_LABELS, extractApiErrorMessage, useEvent } from '../../hooks/useEventsApi';
+import { CHECKIN_POLICY_LABELS, EVENT_STATUS_LABELS, useEvent } from '../../hooks/useEventsApi';
+import { extractApiErrorMessage } from '../../utils/apiErrors';
 import EventVenuesTab from './EventVenuesTab';
 
 interface EventDetailProps {
