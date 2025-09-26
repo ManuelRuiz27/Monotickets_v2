@@ -1,0 +1,13 @@
+openapi: 3.1.0
+info:
+  title: Monotickets API
+  version: 1.0.0
+  description: >
+    API para autenticación, gestión de usuarios, eventos, venues, checkpoints,
+    invitados, tickets 1–N, QRs, escaneo (online/offline), importaciones y notificaciones.
+servers:
+  - url: https://api.monotickets.app/v1
+security:
+  - bearerAuth: []
+    tenantHeader: []
+... (contenido truncado para brevedad en el editor, pero debe contener todo el YAML completo generado arriba) ...
