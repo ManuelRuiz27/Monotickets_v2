@@ -6,7 +6,7 @@ import {
   type UseMutationOptions,
   type UseQueryOptions,
 } from '@tanstack/react-query';
-import { apiFetch, ApiError } from '../api/client';
+import { apiFetch } from '../api/client';
 
 export type EventStatus = 'draft' | 'published' | 'archived';
 export type CheckinPolicy = 'single' | 'multiple';
@@ -223,41 +223,6 @@ export function useDeleteEvent(options?: UseMutationOptions<null, unknown, { eve
     },
     ...restOptions,
   });
-}
-
-export function extractApiErrorMessage(error: unknown, fallbackMessage: string): string {
-  if (error instanceof ApiError) {
-    const raw = error.message;
-    try {
-      const parsed = JSON.parse(raw) as {
-        message?: string;
-        errors?: Record<string, string[] | string>;
-      };
-      if (parsed.errors) {
-        const firstEntry = Object.values(parsed.errors)[0];
-        if (Array.isArray(firstEntry)) {
-          return firstEntry[0] ?? fallbackMessage;
-        }
-        if (typeof firstEntry === 'string' && firstEntry.trim() !== '') {
-          return firstEntry;
-        }
-      }
-      if (parsed.message && parsed.message.trim() !== '') {
-        return parsed.message;
-      }
-    } catch {
-      if (raw.trim() !== '') {
-        return raw;
-      }
-    }
-    return raw.trim() !== '' ? raw : fallbackMessage;
-  }
-
-  if (error instanceof Error && error.message.trim() !== '') {
-    return error.message;
-  }
-
-  return fallbackMessage;
 }
 
 export const EVENT_STATUS_LABELS: Record<EventStatus, string> = {

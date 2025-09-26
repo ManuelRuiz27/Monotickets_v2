@@ -19,7 +19,6 @@ import { useAuthStore } from '../../auth/store';
 import {
   CHECKIN_POLICY_LABELS,
   EVENT_STATUS_LABELS,
-  extractApiErrorMessage,
   type CheckinPolicy,
   type CreateEventPayload,
   type EventResource,
@@ -29,6 +28,7 @@ import {
   useEvent,
   useUpdateEvent,
 } from '../../hooks/useEventsApi';
+import { extractApiErrorMessage } from '../../utils/apiErrors';
 
 const DEFAULT_TIMEZONE = 'America/Monterrey';
 const DATETIME_LOCAL_FORMAT = "yyyy-LL-dd'T'HH:mm";

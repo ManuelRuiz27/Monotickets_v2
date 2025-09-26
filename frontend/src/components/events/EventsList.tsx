@@ -41,13 +41,13 @@ import { DateTime } from 'luxon';
 import { useNavigate } from 'react-router-dom';
 import {
   EVENT_STATUS_LABELS,
-  extractApiErrorMessage,
   type EventResource,
   type EventStatus,
   useArchiveEvent,
   useDeleteEvent,
   useEventsList,
 } from '../../hooks/useEventsApi';
+import { extractApiErrorMessage } from '../../utils/apiErrors';
 
 type OrderDirection = 'asc' | 'desc';
 

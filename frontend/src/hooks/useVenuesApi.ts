@@ -76,6 +76,19 @@ export function useEventVenues(
   });
 }
 
+export function useVenue(
+  eventId: string | undefined,
+  venueId: string | undefined,
+  options?: UseQueryOptions<VenueSingleResponse, unknown, VenueSingleResponse, [string, string, string, string]>,
+) {
+  return useQuery<VenueSingleResponse, unknown, VenueSingleResponse, [string, string, string, string]>({
+    queryKey: ['events', eventId ?? '', 'venues', venueId ?? ''],
+    queryFn: async () => apiFetch<VenueSingleResponse>(`/events/${eventId}/venues/${venueId}`),
+    enabled: Boolean(eventId) && Boolean(venueId),
+    ...options,
+  });
+}
+
 export function useCreateVenue(
   eventId: string,
   options?: UseMutationOptions<VenueSingleResponse, unknown, VenuePayload>,
