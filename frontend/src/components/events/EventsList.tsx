@@ -69,6 +69,20 @@ const formatDate = (iso: string | null | undefined, timezone?: string) => {
   }
 };
 
+const formatCapacity = (capacity: number | null | undefined) => {
+  if (capacity === null || capacity === undefined) {
+    return '—';
+  }
+  return capacity.toLocaleString();
+};
+
+const formatOccupancy = (capacity: number | null | undefined) => {
+  if (capacity === null || capacity === undefined) {
+    return '—';
+  }
+  return '0%';
+};
+
 const orderEvents = (events: EventResource[], order: OrderState) => {
   const sorted = [...events];
   sorted.sort((a, b) => {
@@ -316,6 +330,7 @@ const EventsList = () => {
                         </TableSortLabel>
                       </TableCell>
                       <TableCell>Capacidad</TableCell>
+                      <TableCell>Ocupación</TableCell>
                       <TableCell align="right">Acciones</TableCell>
                     </TableRow>
                   </TableHead>
@@ -339,7 +354,8 @@ const EventsList = () => {
                         <TableCell>
                           <EventStatusChip status={event.status} />
                         </TableCell>
-                        <TableCell>{event.capacity ?? '—'}</TableCell>
+                        <TableCell>{formatCapacity(event.capacity)}</TableCell>
+                        <TableCell>{formatOccupancy(event.capacity)}</TableCell>
                         <TableCell align="right">
                           <Tooltip title="Ver detalle">
                             <span>

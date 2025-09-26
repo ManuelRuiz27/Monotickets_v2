@@ -11,6 +11,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { DateTime } from 'luxon';
@@ -97,6 +98,21 @@ const toIsoString = (value: string, timezone: string): string => {
     .toISO({ suppressMilliseconds: true }) ?? new Date().toISOString();
 };
 
+const convertDateToTimezone = (value: string, fromTimezone: string, toTimezone: string): string | null => {
+  if (!value) return null;
+
+  try {
+    const parsed = DateTime.fromFormat(value, DATETIME_LOCAL_FORMAT, { zone: fromTimezone || toTimezone });
+    if (!parsed.isValid) {
+      return null;
+    }
+
+    return parsed.setZone(toTimezone).toFormat(DATETIME_LOCAL_FORMAT);
+  } catch {
+    return null;
+  }
+};
+
 interface EventFormProps {
   eventId?: string;
 }
@@ -108,6 +124,7 @@ const EventForm = ({ eventId }: EventFormProps) => {
   const [formState, setFormState] = useState<FormState>(buildDefaultFormState);
   const [errors, setErrors] = useState<FormErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [timezoneNotice, setTimezoneNotice] = useState<string | null>(null);
 
   const { data: eventResponse, isLoading: isLoadingEvent, error: eventError } = useEvent(eventId, {
     enabled: isEditing,
@@ -152,6 +169,7 @@ const EventForm = ({ eventId }: EventFormProps) => {
       checkinPolicy: event.checkin_policy,
       settingsJson: event.settings_json ? JSON.stringify(event.settings_json, null, 2) : '',
     });
+    setTimezoneNotice(null);
   }, [eventResponse?.data, isEditing]);
 
   useEffect(() => {
@@ -196,6 +214,65 @@ const EventForm = ({ eventId }: EventFormProps) => {
   const handleChange = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormState((prev) => ({ ...prev, [key]: event.target.value }));
     setErrors((prev) => ({ ...prev, [key]: undefined }));
+    if (key === 'startAt' || key === 'endAt') {
+      setTimezoneNotice(null);
+    }
+  };
+
+  const handleTimezoneChange = (event: SelectChangeEvent<string>) => {
+    const newTimezone = event.target.value;
+    const previousTimezone = formState.timezone || newTimezone;
+
+    const convertedStart = convertDateToTimezone(formState.startAt, previousTimezone, newTimezone);
+    const convertedEnd = convertDateToTimezone(formState.endAt, previousTimezone, newTimezone);
+
+    const startDateTime = convertedStart
+      ? DateTime.fromFormat(convertedStart, DATETIME_LOCAL_FORMAT, { zone: newTimezone })
+      : null;
+    const endDateTime = convertedEnd
+      ? DateTime.fromFormat(convertedEnd, DATETIME_LOCAL_FORMAT, { zone: newTimezone })
+      : null;
+
+    setFormState((prev) => ({
+      ...prev,
+      timezone: newTimezone,
+      startAt: convertedStart ?? prev.startAt,
+      endAt: convertedEnd ?? prev.endAt,
+    }));
+
+    setErrors((prev) => {
+      const next = { ...prev, timezone: undefined };
+
+      if (convertedStart === null && formState.startAt) {
+        next.startAt = 'No se pudo ajustar el horario de inicio automáticamente. Revisa el valor.';
+      } else if (startDateTime) {
+        next.startAt = undefined;
+      }
+
+      if (convertedEnd === null && formState.endAt) {
+        next.endAt = 'No se pudo ajustar el horario de finalización automáticamente. Revisa el valor.';
+      } else if (endDateTime) {
+        next.endAt = undefined;
+      }
+
+      if (startDateTime && endDateTime && endDateTime <= startDateTime) {
+        next.endAt = 'La hora de finalización debe ser posterior al inicio.';
+      }
+
+      return next;
+    });
+
+    let noticeMessage: string;
+    if (startDateTime && endDateTime) {
+      noticeMessage =
+        endDateTime <= startDateTime
+          ? 'Los horarios se ajustaron a la nueva zona horaria, pero el fin no es posterior al inicio. Ajusta las fechas.'
+          : 'Los horarios se ajustaron a la nueva zona horaria. Verifica que los cambios sean correctos.';
+    } else {
+      noticeMessage = 'La zona horaria cambió. Verifica manualmente los horarios del evento.';
+    }
+
+    setTimezoneNotice(noticeMessage);
   };
 
   const validate = (): FormErrors => {
@@ -239,8 +316,8 @@ const EventForm = ({ eventId }: EventFormProps) => {
 
     if (formState.capacity) {
       const numericCapacity = Number.parseInt(formState.capacity, 10);
-      if (Number.isNaN(numericCapacity) || numericCapacity <= 0) {
-        validationErrors.capacity = 'La capacidad debe ser un número positivo.';
+      if (Number.isNaN(numericCapacity) || numericCapacity < 0) {
+        validationErrors.capacity = 'La capacidad no puede ser negativa.';
       }
     }
 
@@ -249,6 +326,17 @@ const EventForm = ({ eventId }: EventFormProps) => {
         JSON.parse(formState.settingsJson);
       } catch (error) {
         validationErrors.settingsJson = 'El JSON de configuración no es válido.';
+      }
+    }
+
+    if (formState.status === 'published' && !validationErrors.status) {
+      const missingOrganizer = !formState.organizerUserId.trim();
+      const missingName = !formState.name.trim();
+      const missingStart = !formState.startAt;
+      const missingEnd = !formState.endAt;
+
+      if (missingOrganizer || missingName || missingStart || missingEnd) {
+        validationErrors.status = 'Completa organizador, nombre y horarios antes de publicar.';
       }
     }
 
@@ -329,6 +417,11 @@ const EventForm = ({ eventId }: EventFormProps) => {
           {eventError && (
             <Alert severity="error">
               {extractApiErrorMessage(eventError, 'No se pudo cargar la información del evento.')}
+            </Alert>
+          )}
+          {timezoneNotice && (
+            <Alert severity="info" onClose={() => setTimezoneNotice(null)}>
+              {timezoneNotice}
             </Alert>
           )}
           {isLoadingEvent && isEditing ? (
@@ -423,7 +516,7 @@ const EventForm = ({ eventId }: EventFormProps) => {
                   select
                   label="Zona horaria"
                   value={formState.timezone}
-                  onChange={handleChange('timezone')}
+                  onChange={handleTimezoneChange}
                   error={Boolean(errors.timezone)}
                   helperText={
                     errors.timezone ?? 'Selecciona una zona horaria IANA. Se preselecciona America/Mexico_City.'

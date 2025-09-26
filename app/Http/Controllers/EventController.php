@@ -117,13 +117,24 @@ class EventController extends Controller
 
         $this->assertUniqueEventCode($tenantId, $validated['code']);
 
+        $startAt = CarbonImmutable::parse($validated['start_at']);
+        $endAt = CarbonImmutable::parse($validated['end_at']);
+
+        $this->assertPublishingReadiness(
+            $validated['status'],
+            $validated['name'] ?? null,
+            $validated['organizer_user_id'] ?? null,
+            $startAt,
+            $endAt,
+        );
+
         /** @var Event $event */
-        $event = DB::transaction(function () use ($validated, $tenantId) {
+        $event = DB::transaction(function () use ($validated, $tenantId, $startAt, $endAt) {
             $event = new Event();
             $event->fill(Arr::except($validated, ['tenant_id']));
             $event->tenant_id = $tenantId;
-            $event->start_at = CarbonImmutable::parse($validated['start_at']);
-            $event->end_at = CarbonImmutable::parse($validated['end_at']);
+            $event->start_at = $startAt;
+            $event->end_at = $endAt;
             $event->settings_json = $validated['settings_json'] ?? null;
             $event->save();
 
@@ -199,6 +210,14 @@ class EventController extends Controller
         }
 
         $payload = Arr::except($validated, ['start_at', 'end_at']);
+
+        $finalStatus = array_key_exists('status', $payload) ? $payload['status'] : $event->status;
+        $finalName = array_key_exists('name', $payload) ? $payload['name'] : $event->name;
+        $finalOrganizer = array_key_exists('organizer_user_id', $payload)
+            ? $payload['organizer_user_id']
+            : $event->organizer_user_id;
+
+        $this->assertPublishingReadiness($finalStatus, $finalName, $finalOrganizer, $startAt, $endAt);
 
         $originalSnapshot = $this->eventAuditSnapshot($event);
 
@@ -276,6 +295,43 @@ class EventController extends Controller
             $this->throwValidationException([
                 'code' => ['The code has already been taken for this tenant.'],
             ]);
+        }
+    }
+
+    /**
+     * Ensure an event meets the minimum requirements before publishing.
+     */
+    private function assertPublishingReadiness(
+        string $status,
+        ?string $name,
+        ?string $organizerId,
+        ?CarbonImmutable $startAt,
+        ?CarbonImmutable $endAt
+    ): void {
+        if ($status !== 'published') {
+            return;
+        }
+
+        $errors = [];
+
+        if ($organizerId === null || trim($organizerId) === '') {
+            $errors['organizer_user_id'][] = 'Debes asignar al menos un organizador antes de publicar.';
+        }
+
+        if ($name === null || trim($name) === '') {
+            $errors['name'][] = 'El evento debe tener un nombre para publicarse.';
+        }
+
+        if ($startAt === null) {
+            $errors['start_at'][] = 'Define la fecha de inicio antes de publicar el evento.';
+        }
+
+        if ($endAt === null) {
+            $errors['end_at'][] = 'Define la fecha de finalización antes de publicar el evento.';
+        }
+
+        if ($errors !== []) {
+            $this->throwValidationException($errors);
         }
     }
 
