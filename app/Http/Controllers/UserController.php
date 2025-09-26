@@ -7,11 +7,10 @@ use App\Http\Params\SortParam;
 use App\Http\Requests\User\UserIndexRequest;
 use App\Http\Requests\User\UserStoreRequest;
 use App\Http\Requests\User\UserUpdateRequest;
-use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\ApiResponse;
-use Carbon\CarbonImmutable;
+use App\Support\Audit\RecordsAuditLogs;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -27,6 +26,7 @@ use Illuminate\Validation\ValidationException;
  */
 class UserController extends Controller
 {
+    use RecordsAuditLogs;
     /**
      * Display a paginated list of users for the current context.
      */
@@ -148,9 +148,9 @@ class UserController extends Controller
             $user->roles()->attach($this->buildRoleAttachments($roles, $tenantId));
             $user->load('roles');
 
-            $this->recordAuditLog($authUser, $request, $user, 'created', [
+            $this->recordAuditLog($authUser, $request, 'user', $user->id, 'created', [
                 'after' => $this->formatUser($user),
-            ]);
+            ], $user->tenant_id);
 
             return $user;
         });
@@ -252,9 +252,9 @@ class UserController extends Controller
             $changes = $this->calculateDifferences($original, $updated);
 
             if ($changes !== []) {
-                $this->recordAuditLog($authUser, $request, $user, 'updated', [
+                $this->recordAuditLog($authUser, $request, 'user', $user->id, 'updated', [
                     'changes' => $changes,
-                ]);
+                ], $user->tenant_id);
             }
         });
 
@@ -281,9 +281,9 @@ class UserController extends Controller
 
         $user->delete();
 
-        $this->recordAuditLog($authUser, $request, $user, 'deleted', [
+        $this->recordAuditLog($authUser, $request, 'user', $user->id, 'deleted', [
             'before' => $snapshot,
-        ]);
+        ], $user->tenant_id);
 
         return response()->json(null, 204);
     }
@@ -452,55 +452,6 @@ class UserController extends Controller
             'created_at' => optional($user->created_at)->toISOString(),
             'updated_at' => optional($user->updated_at)->toISOString(),
         ];
-    }
-
-    /**
-     * Calculate the differences between two state snapshots.
-     *
-     * @param array<string, mixed> $original
-     * @param array<string, mixed> $updated
-     * @return array<string, mixed>
-     */
-    private function calculateDifferences(array $original, array $updated): array
-    {
-        $changes = [];
-
-        foreach ($updated as $key => $value) {
-            if (! array_key_exists($key, $original)) {
-                continue;
-            }
-
-            if ($original[$key] === $value) {
-                continue;
-            }
-
-            $changes[$key] = [
-                'before' => $original[$key],
-                'after' => $value,
-            ];
-        }
-
-        return $changes;
-    }
-
-    /**
-     * Persist an audit log entry for user actions.
-     *
-     * @param array<string, mixed> $diff
-     */
-    private function recordAuditLog(User $actor, Request $request, User $subject, string $action, array $diff): void
-    {
-        AuditLog::create([
-            'tenant_id' => $subject->tenant_id,
-            'user_id' => $actor->id,
-            'entity' => 'user',
-            'entity_id' => $subject->id,
-            'action' => $action,
-            'diff_json' => $diff,
-            'ip' => (string) $request->ip(),
-            'ua' => (string) $request->userAgent(),
-            'occurred_at' => CarbonImmutable::now(),
-        ]);
     }
 
     /**
