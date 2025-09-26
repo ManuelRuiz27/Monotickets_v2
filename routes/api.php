@@ -21,7 +21,9 @@ Route::middleware('api')->group(function (): void {
     Route::prefix('auth')
         ->withoutMiddleware([EnsureTenantHeader::class])
         ->group(function (): void {
-            Route::post('login', [LoginController::class, 'login'])->name('auth.login');
+            Route::post('login', [LoginController::class, 'login'])
+                ->middleware('throttle:auth-login')
+                ->name('auth.login');
 
             Route::middleware(['auth:api', 'role:superadmin,organizer,hostess'])->group(function (): void {
                 Route::post('logout', [LogoutController::class, 'logout'])->name('auth.logout');
@@ -29,7 +31,9 @@ Route::middleware('api')->group(function (): void {
 
             Route::post('refresh', [RefreshTokenController::class, 'refresh'])->name('auth.refresh');
 
-            Route::post('forgot-password', [PasswordController::class, 'forgot'])->name('auth.forgot-password');
+            Route::post('forgot-password', [PasswordController::class, 'forgot'])
+                ->middleware('throttle:auth-forgot')
+                ->name('auth.forgot-password');
             Route::post('reset-password', [PasswordController::class, 'reset'])->name('auth.reset-password');
         });
 

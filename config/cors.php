@@ -1,19 +1,27 @@
 <?php
 
+$defaultOrigins = implode(',', array_filter([
+    env('APP_URL'),
+    'https://app.monotickets.com',
+    'https://admin.monotickets.com',
+    'http://localhost',
+    'http://localhost:3000',
+]));
+
 return [
     'paths' => ['api/*'],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
-    'allowed_origins' => [env('APP_URL', 'http://localhost:*'), 'https://*.monotickets.com'],
+    'allowed_origins' => array_filter(array_map('trim', explode(',', env('CORS_ALLOWED_ORIGINS', $defaultOrigins)))),
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['*'],
+    'allowed_headers' => ['Accept', 'Authorization', 'Content-Type', 'X-Requested-With', 'X-Tenant-ID'],
 
-    'exposed_headers' => ['Authorization', 'X-Requested-With'],
+    'exposed_headers' => ['Authorization'],
 
     'max_age' => 3600,
 
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 ];

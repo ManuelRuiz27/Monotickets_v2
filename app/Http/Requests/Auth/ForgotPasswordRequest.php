@@ -15,7 +15,7 @@ class ForgotPasswordRequest extends ApiFormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'email'],
+            'email' => ['required', 'email:rfc', 'max:255'],
         ];
     }
 }

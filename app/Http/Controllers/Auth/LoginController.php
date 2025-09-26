@@ -28,6 +28,8 @@ class LoginController extends Controller
         $user = User::where('email', $credentials['email'])->first();
 
         if (! $user || ! $user->is_active || ! Hash::check($credentials['password'], (string) $user->password_hash)) {
+            $this->logFailedAttempt($request, $user, $credentials['email']);
+
             return $this->unauthorizedResponse('Invalid email or password.');
         }
 
@@ -99,5 +101,32 @@ class LoginController extends Controller
                 'message' => $message,
             ],
         ], 401);
+    }
+
+    /**
+     * Persist an audit trail for failed authentication attempts.
+     */
+    private function logFailedAttempt(LoginRequest $request, ?User $user, string $email): void
+    {
+        $reason = match (true) {
+            $user === null => 'user_not_found',
+            $user !== null && ! $user->is_active => 'user_inactive',
+            default => 'invalid_password',
+        };
+
+        AuditLog::create([
+            'tenant_id' => $user?->tenant_id,
+            'user_id' => $user?->id,
+            'entity' => 'auth',
+            'entity_id' => $user?->id ?? $email,
+            'action' => 'login_failed',
+            'diff_json' => [
+                'email' => $email,
+                'reason' => $reason,
+            ],
+            'ip' => (string) $request->ip(),
+            'ua' => (string) $request->userAgent(),
+            'occurred_at' => CarbonImmutable::now(),
+        ]);
     }
 }
