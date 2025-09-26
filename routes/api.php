@@ -5,6 +5,9 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\RefreshTokenController;
+use App\Http\Controllers\CheckpointController;
+use App\Http\Controllers\EventController;
+use App\Http\Controllers\VenueController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\EnsureTenantHeader;
 
@@ -45,5 +48,32 @@ Route::middleware('api')->group(function (): void {
             Route::get('{user}', [UserController::class, 'show'])->name('users.show');
             Route::patch('{user}', [UserController::class, 'update'])->name('users.update');
             Route::delete('{user}', [UserController::class, 'destroy'])->name('users.destroy');
+        });
+
+    Route::middleware(['auth:api', 'role:superadmin,organizer'])
+        ->prefix('events')
+        ->group(function (): void {
+            Route::get('/', [EventController::class, 'index'])->name('events.index');
+            Route::post('/', [EventController::class, 'store'])->name('events.store');
+            Route::get('{eventId}', [EventController::class, 'show'])->name('events.show');
+            Route::patch('{eventId}', [EventController::class, 'update'])->name('events.update');
+            Route::delete('{eventId}', [EventController::class, 'destroy'])->name('events.destroy');
+
+            Route::get('{eventId}/venues', [VenueController::class, 'index'])->name('events.venues.index');
+            Route::post('{eventId}/venues', [VenueController::class, 'store'])->name('events.venues.store');
+            Route::get('{eventId}/venues/{venueId}', [VenueController::class, 'show'])->name('events.venues.show');
+            Route::patch('{eventId}/venues/{venueId}', [VenueController::class, 'update'])->name('events.venues.update');
+            Route::delete('{eventId}/venues/{venueId}', [VenueController::class, 'destroy'])->name('events.venues.destroy');
+
+            Route::get('{eventId}/venues/{venueId}/checkpoints', [CheckpointController::class, 'index'])
+                ->name('events.venues.checkpoints.index');
+            Route::post('{eventId}/venues/{venueId}/checkpoints', [CheckpointController::class, 'store'])
+                ->name('events.venues.checkpoints.store');
+            Route::get('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'show'])
+                ->name('events.venues.checkpoints.show');
+            Route::patch('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'update'])
+                ->name('events.venues.checkpoints.update');
+            Route::delete('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'destroy'])
+                ->name('events.venues.checkpoints.destroy');
         });
 });
