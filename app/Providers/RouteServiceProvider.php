@@ -2,28 +2,41 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
-use Illuminate\Routing\Router;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 
 /**
- * Configure API route bindings and patterns.
+ * Configure route related services for the application.
  */
 class RouteServiceProvider extends ServiceProvider
 {
     /**
-     * Define the routes for the application.
+     * Bootstrap any application services.
      */
-    public function map(Router $router): void
+    public function boot(): void
     {
-        $this->mapApiRoutes($router);
+        $this->configureRateLimiting();
     }
 
     /**
-     * Register the API routes for the application.
+     * Configure dedicated rate limiters for authentication endpoints.
      */
-    protected function mapApiRoutes(Router $router): void
+    protected function configureRateLimiting(): void
     {
-        $router->middleware('api')
-            ->group(base_path('routes/api.php'));
+        RateLimiter::for('auth-login', function (Request $request): Limit {
+            $email = (string) $request->input('email');
+            $identifier = $request->ip() . '|' . ($email !== '' ? strtolower($email) : 'guest');
+
+            return Limit::perMinute(5)->by($identifier);
+        });
+
+        RateLimiter::for('auth-forgot', function (Request $request): Limit {
+            $email = (string) $request->input('email');
+            $identifier = $request->ip() . '|' . ($email !== '' ? strtolower($email) : 'guest');
+
+            return Limit::perMinutes(5, 3)->by($identifier);
+        });
     }
 }
