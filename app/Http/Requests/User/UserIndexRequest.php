@@ -21,6 +21,7 @@ class UserIndexRequest extends ApiFormRequest
             'role' => ['sometimes', 'string', Rule::in(['superadmin', 'organizer', 'hostess'])],
             'is_active' => ['sometimes', 'boolean'],
             'search' => ['sometimes', 'string', 'max:255'],
+            'sort' => ['sometimes', 'string', Rule::in(['name', '-name', 'created_at', '-created_at'])],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
@@ -43,4 +44,3 @@ class UserIndexRequest extends ApiFormRequest
         return $validated;
     }
 }
-

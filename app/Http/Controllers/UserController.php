@@ -2,22 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Params\SearchParam;
+use App\Http\Params\SortParam;
 use App\Http\Requests\User\UserIndexRequest;
 use App\Http\Requests\User\UserStoreRequest;
 use App\Http\Requests\User\UserUpdateRequest;
 use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\ApiResponse;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Manage application users.
@@ -74,29 +77,31 @@ class UserController extends Controller
             $query->where('is_active', (bool) $filters['is_active']);
         }
 
-        if (isset($filters['search'])) {
-            $searchTerm = $filters['search'];
+        $searchParam = SearchParam::fromString($filters['search'] ?? null);
 
-            $query->where(function ($searchQuery) use ($searchTerm): void {
-                $searchQuery->where('name', 'like', "%{$searchTerm}%")
-                    ->orWhere('email', 'like', "%{$searchTerm}%");
-            });
+        if ($searchParam !== null) {
+            $searchParam->apply($query, ['name', 'email']);
         }
 
         $perPage = (int) ($filters['per_page'] ?? 15);
 
+        $sortParam = SortParam::fromString(
+            $filters['sort'] ?? null,
+            ['name', 'created_at'],
+            SortParam::asc('name')
+        );
+
+        $sortParam->apply($query);
+
         /** @var LengthAwarePaginator $paginator */
-        $paginator = $query->orderBy('name')->paginate($perPage);
+        $paginator = $query->paginate($perPage);
         $paginator->getCollection()->transform(fn (User $user): array => $this->formatUser($user));
 
-        return response()->json([
-            'data' => $paginator->items(),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-            ],
+        return ApiResponse::paginate($paginator->items(), [
+            'page' => $paginator->currentPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'total_pages' => $paginator->lastPage(),
         ]);
     }
 
@@ -530,13 +535,7 @@ class UserController extends Controller
      */
     private function throwValidationException(array $errors): void
     {
-        throw new HttpResponseException(response()->json([
-            'error' => [
-                'code' => 'VALIDATION_ERROR',
-                'message' => 'The given data was invalid.',
-                'details' => $errors,
-            ],
-        ], 422));
+        throw ValidationException::withMessages($errors);
     }
 }
 
