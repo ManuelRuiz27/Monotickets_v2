@@ -42,7 +42,9 @@ export const useAuthStore = create<AuthState>()(
       },
       refresh: ({ token, user }) => {
         const currentUser = get().user;
-        const mergedUser = user ? { ...currentUser, ...user } : currentUser;
+        const mergedUser = user
+          ? ({ ...(currentUser ?? {}), ...user } as AuthUser)
+          : currentUser;
         set({
           token,
           user: mergedUser ?? null,

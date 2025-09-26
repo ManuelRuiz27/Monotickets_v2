@@ -37,7 +37,8 @@ const Login = () => {
         tenantId: tenant || undefined,
       });
 
-      login({ token: response.token, user: { ...response.user, tenantId: response.user.tenantId ?? tenant || undefined } });
+      const resolvedTenantId = response.user.tenantId ?? (tenant || undefined);
+      login({ token: response.token, user: { ...response.user, tenantId: resolvedTenantId } });
       navigate(from, { replace: true });
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'No se pudo iniciar sesión';

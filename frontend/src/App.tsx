@@ -2,6 +2,8 @@ import { Route, Routes } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import UsersList from './pages/UsersList';
+import EventsList from './pages/EventsList';
+import EventForm from './pages/EventForm';
 import { RequireAuth, RequireRole } from './routes/guards';
 import Layout from './components/Layout';
 
@@ -22,6 +24,30 @@ function App() {
           element={
             <RequireRole roles={['organizer', 'superadmin']}>
               <UsersList />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="events"
+          element={
+            <RequireRole roles={['organizer', 'superadmin']}>
+              <EventsList />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="events/new"
+          element={
+            <RequireRole roles={['organizer', 'superadmin']}>
+              <EventForm />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="events/:eventId/edit"
+          element={
+            <RequireRole roles={['organizer', 'superadmin']}>
+              <EventForm />
             </RequireRole>
           }
         />
