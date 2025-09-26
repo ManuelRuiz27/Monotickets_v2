@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -34,6 +35,16 @@ class Venue extends Model
         'lat' => 'float',
         'lng' => 'float',
     ];
+
+    /**
+     * Scope the query to venues whose event belongs to the given tenant.
+     */
+    public function scopeForTenant(Builder $query, string $tenantId): Builder
+    {
+        return $query->whereHas('event', function (Builder $eventQuery) use ($tenantId): void {
+            $eventQuery->where('tenant_id', $tenantId);
+        });
+    }
 
     /**
      * Event that owns the venue.

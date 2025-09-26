@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -68,6 +69,14 @@ class Event extends Model
                 }
             }
         });
+    }
+
+    /**
+     * Scope the query to events that belong to the given tenant.
+     */
+    public function scopeForTenant(Builder $query, string $tenantId): Builder
+    {
+        return $query->where('tenant_id', $tenantId);
     }
 
     /**
