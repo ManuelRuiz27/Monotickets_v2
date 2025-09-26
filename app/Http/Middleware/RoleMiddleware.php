@@ -2,9 +2,13 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Role;
+use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Symfony\Component\HttpFoundation\Response;
+use function abort;
 
 /**
  * Authorise API calls by matching the authenticated user's role.
@@ -21,13 +25,72 @@ class RoleMiddleware
      */
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
+        /** @var User|null $user */
         $user = $request->user();
-        $validRoles = $roles ?: self::ALLOWED_ROLES;
 
-        if (! $user || ! in_array($user->role ?? null, $validRoles, true)) {
+        if ($user === null) {
+            abort(Response::HTTP_FORBIDDEN, 'This action is unauthorised.');
+        }
+
+        $requiredRoles = $this->normaliseRoles($roles);
+
+        $user->loadMissing('roles');
+
+        if ($this->hasRole($user, 'superadmin')) {
+            return $next($request);
+        }
+
+        $tenantId = $request->headers->get('X-Tenant-ID');
+
+        if (($tenantId === null || $tenantId === '') && $user->tenant_id !== null) {
+            $tenantId = (string) $user->tenant_id;
+        }
+
+        if ($tenantId === null || $tenantId === '') {
+            abort(Response::HTTP_FORBIDDEN, 'Missing X-Tenant-ID header.');
+        }
+
+        $hasRequiredRole = $user->roles->contains(function (Role $role) use ($tenantId, $requiredRoles): bool {
+            if (! in_array($role->code, $requiredRoles, true)) {
+                return false;
+            }
+
+            $assignedTenantId = $role->pivot->tenant_id ?? null;
+
+            return (string) $assignedTenantId === (string) $tenantId;
+        });
+
+        if (! $hasRequiredRole) {
             abort(Response::HTTP_FORBIDDEN, 'This action is unauthorised.');
         }
 
         return $next($request);
+    }
+
+    /**
+     * Determine if the user holds the given role code.
+     */
+    private function hasRole(User $user, string $role): bool
+    {
+        return $user->roles->contains(fn (Role $assignedRole): bool => $assignedRole->code === $role);
+    }
+
+    /**
+     * Normalise a list of role slugs and apply defaults when none are provided.
+     *
+     * @param  array<int, string>  $roles
+     * @return array<int, string>
+     */
+    private function normaliseRoles(array $roles): array
+    {
+        $roles = array_filter(array_map('strtolower', $roles));
+
+        if ($roles === []) {
+            return self::ALLOWED_ROLES;
+        }
+
+        $filtered = array_values(array_unique(Arr::where($roles, fn ($role) => in_array($role, self::ALLOWED_ROLES, true))));
+
+        return $filtered;
     }
 }
