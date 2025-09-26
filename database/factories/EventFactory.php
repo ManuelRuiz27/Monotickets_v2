@@ -46,24 +46,31 @@ class EventFactory extends Factory
      */
     public function configure(): static
     {
-        return $this->afterCreating(function (Event $event): void {
-            $tenantId = $event->tenant_id;
+        return $this->afterMaking(function (Event $event): void {
+            $tenant = null;
 
-            $organizer = $event->organizer()->withTrashed()->first();
-            if ($organizer && $organizer->tenant_id === $tenantId) {
-                return;
+            if ($event->tenant_id) {
+                $tenant = Tenant::withTrashed()->find($event->tenant_id);
             }
 
-            $tenant = Tenant::find($tenantId);
             if (!$tenant) {
                 $tenant = Tenant::factory()->create();
-                $event->forceFill(['tenant_id' => $tenant->id])->save();
-                $tenantId = $tenant->id;
+                $event->tenant_id = $tenant->id;
+            }
+
+            if ($event->organizer_user_id) {
+                $organizerTenantId = User::withTrashed()
+                    ->whereKey($event->organizer_user_id)
+                    ->value('tenant_id');
+
+                if ($organizerTenantId === $tenant->id) {
+                    return;
+                }
             }
 
             $organizer = User::factory()->for($tenant)->create();
 
-            $event->forceFill(['organizer_user_id' => $organizer->id])->save();
+            $event->organizer_user_id = $organizer->id;
         });
     }
 }
