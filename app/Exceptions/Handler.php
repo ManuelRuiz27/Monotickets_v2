@@ -49,7 +49,7 @@ class Handler extends ExceptionHandler
 
             return ApiResponse::error(
                 'VALIDATION_ERROR',
-                'The given data was invalid.',
+                __('validation.generic_error'),
                 $exception->errors(),
                 $status
             );
