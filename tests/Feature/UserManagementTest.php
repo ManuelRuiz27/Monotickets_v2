@@ -7,10 +7,12 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use Tests\Concerns\CreatesUsers;
 
 class UserManagementTest extends TestCase
 {
     use RefreshDatabase;
+    use CreatesUsers;
 
     protected function setUp(): void
     {
@@ -273,13 +275,5 @@ class UserManagementTest extends TestCase
         ]);
     }
 
-    private function createSuperAdmin(): User
-    {
-        $role = Role::factory()->create(['code' => 'superadmin', 'tenant_id' => null]);
-        $user = User::factory()->create(['tenant_id' => null]);
-        $user->roles()->attach($role->id, ['tenant_id' => null]);
-
-        return $user->fresh();
-    }
 }
 
