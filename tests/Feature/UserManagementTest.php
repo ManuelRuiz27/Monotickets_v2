@@ -19,6 +19,47 @@ class UserManagementTest extends TestCase
         config(['tenant.id' => null]);
     }
 
+    public function test_users_index_requires_authentication(): void
+    {
+        $response = $this->getJson('/users');
+
+        $response->assertUnauthorized();
+    }
+
+    public function test_organizer_request_without_tenant_header_is_forbidden(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $role = Role::factory()->create(['code' => 'organizer', 'tenant_id' => $tenant->id]);
+
+        $organizer = User::factory()->create(['tenant_id' => $tenant->id]);
+        $organizer->roles()->attach($role->id, ['tenant_id' => $tenant->id]);
+
+        $response = $this->actingAs($organizer, 'api')->getJson('/users');
+
+        $response->assertForbidden();
+    }
+
+    public function test_superadmin_can_access_users_without_tenant_header(): void
+    {
+        $tenantA = Tenant::factory()->create();
+        $tenantB = Tenant::factory()->create();
+
+        $hostessRoleA = Role::factory()->create(['code' => 'hostess', 'tenant_id' => $tenantA->id]);
+        $hostessRoleB = Role::factory()->create(['code' => 'hostess', 'tenant_id' => $tenantB->id]);
+
+        $userA = User::factory()->create(['tenant_id' => $tenantA->id]);
+        $userB = User::factory()->create(['tenant_id' => $tenantB->id]);
+        $userA->roles()->attach($hostessRoleA->id, ['tenant_id' => $tenantA->id]);
+        $userB->roles()->attach($hostessRoleB->id, ['tenant_id' => $tenantB->id]);
+
+        $superAdmin = $this->createSuperAdmin();
+
+        $response = $this->actingAs($superAdmin, 'api')->getJson('/users');
+
+        $response->assertOk();
+        $response->assertJsonPath('meta.total', 3);
+    }
+
     public function test_superadmin_can_list_users_with_filters(): void
     {
         $tenant = Tenant::factory()->create();
@@ -144,6 +185,32 @@ class UserManagementTest extends TestCase
             'entity_id' => $created->id,
             'action' => 'created',
         ]);
+    }
+
+    public function test_creating_user_with_duplicate_email_in_same_tenant_returns_conflict(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $superAdmin = $this->createSuperAdmin();
+
+        $organizerRole = Role::factory()->create(['code' => 'organizer', 'tenant_id' => $tenant->id]);
+
+        $existingUser = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'duplicate@example.com',
+        ]);
+        $existingUser->roles()->attach($organizerRole->id, ['tenant_id' => $tenant->id]);
+
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->postJson('/users', [
+                'name' => 'Duplicate User',
+                'email' => 'duplicate@example.com',
+                'password' => 'password123',
+                'roles' => ['organizer'],
+            ]);
+
+        $response->assertStatus(409);
+        $response->assertJsonPath('error.code', 'VALIDATION_ERROR');
     }
 
     public function test_update_user_updates_roles_and_logs(): void
