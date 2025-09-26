@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit bootstrap="vendor/autoload.php" colors="true" stopOnFailure="false">
+    <coverage processUncoveredFiles="true">
+        <include>
+            <directory suffix=".php">app/Http</directory>
+            <directory suffix=".php">app/Models</directory>
+        </include>
+        <failOn>
+            <threshold type="line" limit="80"/>
+        </failOn>
+        <report>
+            <text output="php://stdout" showOnlySummary="true"/>
+        </report>
+    </coverage>
+
     <testsuites>
         <testsuite name="Feature">
             <directory suffix="Test.php">tests/Feature</directory>
@@ -17,5 +30,6 @@
         <env name="CACHE_DRIVER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="MAIL_MAILER" value="array"/>
+        <env name="JWT_SECRET" value="testing-secret"/>
     </php>
 </phpunit>

@@ -37,14 +37,42 @@ class Handler extends ExceptionHandler
     public function register(): void
     {
         $this->renderable(function (ValidationException $exception, Request $request) {
-            if ($request->expectsJson()) {
-                return ApiResponse::error(
-                    'VALIDATION_ERROR',
-                    'The given data was invalid.',
-                    $exception->errors(),
-                    $exception->status
-                );
+            if (! $request->expectsJson()) {
+                return null;
             }
+
+            $status = $exception->status;
+
+            if ($status === 422 && $this->isConflictValidation($exception)) {
+                $status = 409;
+            }
+
+            return ApiResponse::error(
+                'VALIDATION_ERROR',
+                'The given data was invalid.',
+                $exception->errors(),
+                $status
+            );
         });
+    }
+
+    /**
+     * Determine if the validation failure represents a conflict error.
+     */
+    private function isConflictValidation(ValidationException $exception): bool
+    {
+        $failed = $exception->validator?->failed();
+
+        if (! is_array($failed)) {
+            return false;
+        }
+
+        foreach ($failed as $rules) {
+            if (array_key_exists('Unique', $rules)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
