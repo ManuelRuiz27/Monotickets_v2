@@ -59,6 +59,15 @@ const formatCapacity = (capacity: number | null | undefined) => {
   return capacity.toLocaleString();
 };
 
+const formatOccupancy = (capacity: number | null | undefined) => {
+  if (capacity === null || capacity === undefined) {
+    return 'No disponible sin capacidad definida.';
+  }
+
+  const formattedCapacity = capacity.toLocaleString();
+  return `0% (0 de ${formattedCapacity} lugares)`;
+};
+
 const DetailItem = ({ label, value }: { label: string; value: ReactNode }) => (
   <Box>
     <Typography variant="subtitle2" color="text.secondary">
@@ -149,6 +158,9 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
           </Grid>
           <Grid item xs={12} md={6}>
             <DetailItem label="Capacidad" value={formatCapacity(eventData.capacity)} />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <DetailItem label="Ocupación" value={formatOccupancy(eventData.capacity)} />
           </Grid>
           <Grid item xs={12} md={6}>
             <DetailItem

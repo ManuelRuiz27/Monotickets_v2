@@ -44,7 +44,7 @@ abstract class EventRequest extends ApiFormRequest
             'end_at' => array_merge($required, ['date']),
             'timezone' => array_merge($required, ['timezone:all']),
             'status' => array_merge($required, [Rule::in(self::STATUS_OPTIONS)]),
-            'capacity' => array_merge($optional, ['integer', 'min:1']),
+            'capacity' => array_merge($optional, ['integer', 'min:0']),
             'checkin_policy' => array_merge($required, [Rule::in(self::CHECKIN_POLICY_OPTIONS)]),
             'settings_json' => array_merge($optional, ['array']),
         ];
@@ -72,6 +72,8 @@ abstract class EventRequest extends ApiFormRequest
             'end_at.date' => __('validation.event.end_at.date'),
             'status.required' => __('validation.event.status.required'),
             'status.in' => __('validation.event.status.in'),
+            'capacity.min' => __('validation.event.capacity.min'),
+            'capacity.integer' => __('validation.event.capacity.integer'),
             'checkin_policy.required' => __('validation.event.checkin_policy.required'),
             'checkin_policy.in' => __('validation.event.checkin_policy.in'),
         ];

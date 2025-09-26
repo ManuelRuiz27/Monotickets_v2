@@ -31,6 +31,10 @@ return [
             'required' => 'El estado del evento es obligatorio.',
             'in' => 'El estado seleccionado no es válido.',
         ],
+        'capacity' => [
+            'integer' => 'La capacidad debe ser un número entero.',
+            'min' => 'La capacidad no puede ser negativa.',
+        ],
         'checkin_policy' => [
             'required' => 'La política de check-in es obligatoria.',
             'in' => 'La política de check-in seleccionada no es válida.',
