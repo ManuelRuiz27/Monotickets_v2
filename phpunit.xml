@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit bootstrap="vendor/autoload.php" colors="true" stopOnFailure="false">
     <testsuites>
+        <testsuite name="Feature">
+            <directory suffix="Test.php">tests/Feature</directory>
+        </testsuite>
         <testsuite name="Unit">
             <directory suffix="Test.php">tests/Unit</directory>
         </testsuite>
     </testsuites>
+
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_KEY" value="base64:ZuVw7U9jwELyhl725LLJoPLt114F8CbnMD4HzyBbs9w="/>
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+        <env name="CACHE_DRIVER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="MAIL_MAILER" value="array"/>
+    </php>
 </phpunit>

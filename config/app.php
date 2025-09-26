@@ -37,6 +37,7 @@ return [
 
         Tymon\JWTAuth\Providers\LaravelServiceProvider::class,
 
+        App\Providers\AuthServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
     ],
 ];
