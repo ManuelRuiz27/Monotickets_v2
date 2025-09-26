@@ -6,13 +6,16 @@ use App\Http\Controllers\Concerns\InteractsWithTenants;
 use App\Http\Requests\Venue\VenueIndexRequest;
 use App\Http\Requests\Venue\VenueStoreRequest;
 use App\Http\Requests\Venue\VenueUpdateRequest;
+use App\Models\Checkpoint;
 use App\Models\Event;
 use App\Models\User;
 use App\Models\Venue;
 use App\Support\ApiResponse;
+use App\Support\Audit\RecordsAuditLogs;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Handle CRUD operations for event venues.
@@ -20,6 +23,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 class VenueController extends Controller
 {
     use InteractsWithTenants;
+    use RecordsAuditLogs;
 
     /**
      * Display a paginated listing of venues for the given event.
@@ -72,9 +76,14 @@ class VenueController extends Controller
         $venue->fill($validated);
         $venue->event_id = $event->id;
         $venue->save();
+        $venue->refresh();
+
+        $this->recordAuditLog($authUser, $request, 'venue', $venue->id, 'created', [
+            'after' => $this->venueAuditSnapshot($venue),
+        ], $event->tenant_id);
 
         return response()->json([
-            'data' => $this->formatVenue($venue->refresh()),
+            'data' => $this->formatVenue($venue),
         ], 201);
     }
 
@@ -124,12 +133,24 @@ class VenueController extends Controller
         $validated = $request->validated();
 
         if ($validated !== []) {
+            $originalSnapshot = $this->venueAuditSnapshot($venue);
+
             $venue->fill($validated);
             $venue->save();
+            $venue->refresh();
+
+            $updatedSnapshot = $this->venueAuditSnapshot($venue);
+            $changes = $this->calculateDifferences($originalSnapshot, $updatedSnapshot);
+
+            if ($changes !== []) {
+                $this->recordAuditLog($authUser, $request, 'venue', $venue->id, 'updated', [
+                    'changes' => $changes,
+                ], $event->tenant_id);
+            }
         }
 
         return response()->json([
-            'data' => $this->formatVenue($venue->refresh()),
+            'data' => $this->formatVenue($venue),
         ]);
     }
 
@@ -152,7 +173,38 @@ class VenueController extends Controller
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
         }
 
-        $venue->delete();
+        $activeCheckpoints = $venue->checkpoints()->whereNull('deleted_at')->get();
+        $checkpointSnapshots = [];
+
+        foreach ($activeCheckpoints as $checkpoint) {
+            $checkpointSnapshots[$checkpoint->id] = $this->checkpointAuditSnapshot($checkpoint);
+        }
+
+        $venueSnapshot = $this->venueAuditSnapshot($venue);
+
+        DB::transaction(function () use (
+            $activeCheckpoints,
+            $checkpointSnapshots,
+            $venue,
+            $venueSnapshot,
+            $authUser,
+            $request,
+            $event
+        ): void {
+            foreach ($activeCheckpoints as $checkpoint) {
+                $checkpoint->delete();
+
+                $this->recordAuditLog($authUser, $request, 'checkpoint', $checkpoint->id, 'deleted', [
+                    'before' => $checkpointSnapshots[$checkpoint->id],
+                ], $event->tenant_id);
+            }
+
+            $venue->delete();
+
+            $this->recordAuditLog($authUser, $request, 'venue', $venue->id, 'deleted', [
+                'before' => $venueSnapshot,
+            ], $event->tenant_id);
+        });
 
         return response()->json(null, 204);
     }
@@ -210,6 +262,40 @@ class VenueController extends Controller
             'notes' => $venue->notes,
             'created_at' => optional($venue->created_at)->toISOString(),
             'updated_at' => optional($venue->updated_at)->toISOString(),
+        ];
+    }
+
+    /**
+     * Build an audit snapshot for the venue.
+     *
+     * @return array<string, mixed>
+     */
+    private function venueAuditSnapshot(Venue $venue): array
+    {
+        return [
+            'id' => $venue->id,
+            'event_id' => $venue->event_id,
+            'name' => $venue->name,
+            'address' => $venue->address,
+            'lat' => $venue->lat,
+            'lng' => $venue->lng,
+            'notes' => $venue->notes,
+        ];
+    }
+
+    /**
+     * Build an audit snapshot for a checkpoint related to the venue.
+     *
+     * @return array<string, mixed>
+     */
+    private function checkpointAuditSnapshot(Checkpoint $checkpoint): array
+    {
+        return [
+            'id' => $checkpoint->id,
+            'event_id' => $checkpoint->event_id,
+            'venue_id' => $checkpoint->venue_id,
+            'name' => $checkpoint->name,
+            'description' => $checkpoint->description,
         ];
     }
 }

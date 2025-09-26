@@ -10,6 +10,7 @@ use App\Http\Requests\Event\EventUpdateRequest;
 use App\Models\Event;
 use App\Models\User;
 use App\Support\ApiResponse;
+use App\Support\Audit\RecordsAuditLogs;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ use Illuminate\Support\Facades\DB;
 class EventController extends Controller
 {
     use InteractsWithTenants;
+    use RecordsAuditLogs;
 
     /**
      * Display a paginated list of events with filtering capabilities.
@@ -128,6 +130,10 @@ class EventController extends Controller
             return $event->refresh();
         });
 
+        $this->recordAuditLog($authUser, $request, 'event', $event->id, 'created', [
+            'after' => $this->eventAuditSnapshot($event),
+        ], $event->tenant_id);
+
         return response()->json([
             'data' => $this->formatEvent($event),
         ], 201);
@@ -194,6 +200,8 @@ class EventController extends Controller
 
         $payload = Arr::except($validated, ['start_at', 'end_at']);
 
+        $originalSnapshot = $this->eventAuditSnapshot($event);
+
         if ($payload !== []) {
             $event->fill($payload);
         }
@@ -211,9 +219,19 @@ class EventController extends Controller
         }
 
         $event->save();
+        $event->refresh();
+
+        $updatedSnapshot = $this->eventAuditSnapshot($event);
+        $changes = $this->calculateDifferences($originalSnapshot, $updatedSnapshot);
+
+        if ($changes !== []) {
+            $this->recordAuditLog($authUser, $request, 'event', $event->id, 'updated', [
+                'changes' => $changes,
+            ], $event->tenant_id);
+        }
 
         return response()->json([
-            'data' => $this->formatEvent($event->refresh()),
+            'data' => $this->formatEvent($event),
         ]);
     }
 
@@ -230,7 +248,13 @@ class EventController extends Controller
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
         }
 
+        $snapshot = $this->eventAuditSnapshot($event);
+
         $event->delete();
+
+        $this->recordAuditLog($authUser, $request, 'event', $event->id, 'deleted', [
+            'before' => $snapshot,
+        ], $event->tenant_id);
 
         return response()->json(null, 204);
     }
@@ -314,6 +338,30 @@ class EventController extends Controller
             'settings_json' => $event->settings_json,
             'created_at' => optional($event->created_at)->toISOString(),
             'updated_at' => optional($event->updated_at)->toISOString(),
+        ];
+    }
+
+    /**
+     * Build a normalized snapshot of the event for audit logging.
+     *
+     * @return array<string, mixed>
+     */
+    private function eventAuditSnapshot(Event $event): array
+    {
+        return [
+            'id' => $event->id,
+            'tenant_id' => $event->tenant_id,
+            'organizer_user_id' => $event->organizer_user_id,
+            'code' => $event->code,
+            'name' => $event->name,
+            'description' => $event->description,
+            'start_at' => optional($event->start_at)->toISOString(),
+            'end_at' => optional($event->end_at)->toISOString(),
+            'timezone' => $event->timezone,
+            'status' => $event->status,
+            'capacity' => $event->capacity,
+            'checkin_policy' => $event->checkin_policy,
+            'settings_json' => $event->settings_json,
         ];
     }
 }
