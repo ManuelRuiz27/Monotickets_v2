@@ -11,6 +11,7 @@ use App\Models\Event;
 use App\Models\User;
 use App\Models\Venue;
 use App\Support\ApiResponse;
+use App\Support\Audit\RecordsAuditLogs;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -21,6 +22,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 class CheckpointController extends Controller
 {
     use InteractsWithTenants;
+    use RecordsAuditLogs;
 
     /**
      * Display a paginated listing of checkpoints for the venue.
@@ -87,9 +89,14 @@ class CheckpointController extends Controller
         $checkpoint->event_id = $event->id;
         $checkpoint->venue_id = $venue->id;
         $checkpoint->save();
+        $checkpoint->refresh();
+
+        $this->recordAuditLog($authUser, $request, 'checkpoint', $checkpoint->id, 'created', [
+            'after' => $this->checkpointAuditSnapshot($checkpoint),
+        ], $event->tenant_id);
 
         return response()->json([
-            'data' => $this->formatCheckpoint($checkpoint->refresh()),
+            'data' => $this->formatCheckpoint($checkpoint),
         ], 201);
     }
 
@@ -151,12 +158,24 @@ class CheckpointController extends Controller
         $validated = $request->validated();
 
         if ($validated !== []) {
+            $originalSnapshot = $this->checkpointAuditSnapshot($checkpoint);
+
             $checkpoint->fill($validated);
             $checkpoint->save();
+            $checkpoint->refresh();
+
+            $updatedSnapshot = $this->checkpointAuditSnapshot($checkpoint);
+            $changes = $this->calculateDifferences($originalSnapshot, $updatedSnapshot);
+
+            if ($changes !== []) {
+                $this->recordAuditLog($authUser, $request, 'checkpoint', $checkpoint->id, 'updated', [
+                    'changes' => $changes,
+                ], $event->tenant_id);
+            }
         }
 
         return response()->json([
-            'data' => $this->formatCheckpoint($checkpoint->refresh()),
+            'data' => $this->formatCheckpoint($checkpoint),
         ]);
     }
 
@@ -185,7 +204,13 @@ class CheckpointController extends Controller
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
         }
 
+        $snapshot = $this->checkpointAuditSnapshot($checkpoint);
+
         $checkpoint->delete();
+
+        $this->recordAuditLog($authUser, $request, 'checkpoint', $checkpoint->id, 'deleted', [
+            'before' => $snapshot,
+        ], $event->tenant_id);
 
         return response()->json(null, 204);
     }
@@ -253,6 +278,22 @@ class CheckpointController extends Controller
             'description' => $checkpoint->description,
             'created_at' => optional($checkpoint->created_at)->toISOString(),
             'updated_at' => optional($checkpoint->updated_at)->toISOString(),
+        ];
+    }
+
+    /**
+     * Build a normalized snapshot for checkpoint audit logging.
+     *
+     * @return array<string, mixed>
+     */
+    private function checkpointAuditSnapshot(Checkpoint $checkpoint): array
+    {
+        return [
+            'id' => $checkpoint->id,
+            'event_id' => $checkpoint->event_id,
+            'venue_id' => $checkpoint->venue_id,
+            'name' => $checkpoint->name,
+            'description' => $checkpoint->description,
         ];
     }
 }
