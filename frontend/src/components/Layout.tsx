@@ -18,6 +18,7 @@ const Layout = () => {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
+          <NavLink to="/events">Eventos</NavLink>
           <NavLink to="/users">Usuarios</NavLink>
           {user && (
             <span style={{ marginLeft: 'auto', paddingRight: '1rem' }}>
