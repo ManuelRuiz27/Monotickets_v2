@@ -30,18 +30,17 @@ import {
 } from '../../hooks/useEventsApi';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
 
-const DEFAULT_TIMEZONE = 'America/Monterrey';
+const DEFAULT_TIMEZONE = 'America/Mexico_City';
 const DATETIME_LOCAL_FORMAT = "yyyy-LL-dd'T'HH:mm";
 
 const TIMEZONE_OPTIONS = [
-  'America/Monterrey',
   'America/Mexico_City',
+  'America/Monterrey',
   'America/Chicago',
   'America/Bogota',
   'America/Lima',
-  'America/Argentina/Buenos_Aires',
   'America/Santiago',
-  'Europe/Madrid',
+  'America/Argentina/Buenos_Aires',
   'UTC',
 ];
 
@@ -163,6 +162,36 @@ const EventForm = ({ eventId }: EventFormProps) => {
 
   const statusOptions = useMemo(() => Object.entries(EVENT_STATUS_LABELS) as [EventStatus, string][], []);
   const checkinOptions = useMemo(() => Object.entries(CHECKIN_POLICY_LABELS), []);
+  const totalDurationHours = useMemo(() => {
+    if (!formState.startAt || !formState.endAt || !formState.timezone) {
+      return null;
+    }
+
+    try {
+      const start = DateTime.fromFormat(formState.startAt, DATETIME_LOCAL_FORMAT, { zone: formState.timezone });
+      const end = DateTime.fromFormat(formState.endAt, DATETIME_LOCAL_FORMAT, { zone: formState.timezone });
+      if (!start.isValid || !end.isValid || end <= start) {
+        return null;
+      }
+      const diff = end.diff(start, 'hours').hours;
+      if (Number.isNaN(diff)) {
+        return null;
+      }
+      return diff;
+    } catch {
+      return null;
+    }
+  }, [formState.endAt, formState.startAt, formState.timezone]);
+  const formattedDuration = useMemo(() => {
+    if (totalDurationHours === null) {
+      return null;
+    }
+
+    return new Intl.NumberFormat('es-MX', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(totalDurationHours);
+  }, [totalDurationHours]);
 
   const handleChange = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormState((prev) => ({ ...prev, [key]: event.target.value }));
@@ -365,7 +394,7 @@ const EventForm = ({ eventId }: EventFormProps) => {
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Inicio"
+                  label="Inicio (zona del evento)"
                   type="datetime-local"
                   value={formState.startAt}
                   onChange={handleChange('startAt')}
@@ -378,7 +407,7 @@ const EventForm = ({ eventId }: EventFormProps) => {
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Fin"
+                  label="Fin (zona del evento)"
                   type="datetime-local"
                   value={formState.endAt}
                   onChange={handleChange('endAt')}
@@ -396,7 +425,9 @@ const EventForm = ({ eventId }: EventFormProps) => {
                   value={formState.timezone}
                   onChange={handleChange('timezone')}
                   error={Boolean(errors.timezone)}
-                  helperText={errors.timezone ?? 'Se preselecciona America/Monterrey.'}
+                  helperText={
+                    errors.timezone ?? 'Selecciona una zona horaria IANA. Se preselecciona America/Mexico_City.'
+                  }
                   required
                   fullWidth
                 >
@@ -424,6 +455,16 @@ const EventForm = ({ eventId }: EventFormProps) => {
                     </MenuItem>
                   ))}
                 </TextField>
+              </Grid>
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }} role="status" aria-live="polite">
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Duración total
+                  </Typography>
+                  <Typography variant="body1">
+                    {formattedDuration ? `${formattedDuration} horas` : 'Se calculará automáticamente.'}
+                  </Typography>
+                </Paper>
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField

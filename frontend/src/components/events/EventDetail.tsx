@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Container,
   Grid,
@@ -16,9 +15,10 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { DateTime } from 'luxon';
 import { useNavigate } from 'react-router-dom';
-import { CHECKIN_POLICY_LABELS, EVENT_STATUS_LABELS, useEvent } from '../../hooks/useEventsApi';
+import { CHECKIN_POLICY_LABELS, type CheckinPolicy, useEvent } from '../../hooks/useEventsApi';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
 import EventVenuesTab from './EventVenuesTab';
+import EventStatusChip from './EventStatusChip';
 
 interface EventDetailProps {
   eventId: string;
@@ -29,9 +29,26 @@ type TabValue = 'summary' | 'venues';
 const formatDateTime = (iso: string | null | undefined, timezone: string) => {
   if (!iso) return '—';
   try {
-    return DateTime.fromISO(iso, { zone: timezone || undefined }).toFormat('dd/MM/yyyy HH:mm');
+    return DateTime.fromISO(iso, { zone: timezone || undefined }).toFormat("dd/MM/yyyy HH:mm 'hrs' (z)");
   } catch {
     return '—';
+  }
+};
+
+const calculateDurationHours = (startIso: string | null | undefined, endIso: string | null | undefined, timezone: string) => {
+  if (!startIso || !endIso) {
+    return null;
+  }
+
+  try {
+    const start = DateTime.fromISO(startIso, { zone: timezone || undefined });
+    const end = DateTime.fromISO(endIso, { zone: timezone || undefined });
+    if (!start.isValid || !end.isValid || end <= start) {
+      return null;
+    }
+    return end.diff(start, 'hours').hours;
+  } catch {
+    return null;
   }
 };
 
@@ -61,10 +78,16 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
   const headerTitle = eventData?.name ?? 'Detalle del evento';
   const statusChip = useMemo(() => {
     if (!eventData) return null;
-    const label = EVENT_STATUS_LABELS[eventData.status] ?? eventData.status;
-    const color: 'default' | 'success' | 'warning' =
-      eventData.status === 'published' ? 'success' : eventData.status === 'archived' ? 'warning' : 'default';
-    return <Chip label={label} color={color} size="small" />;
+    return <EventStatusChip status={eventData.status} />;
+  }, [eventData]);
+
+  const formattedDuration = useMemo(() => {
+    if (!eventData) return null;
+    const durationHours = calculateDurationHours(eventData.start_at, eventData.end_at, eventData.timezone);
+    if (durationHours === null) {
+      return null;
+    }
+    return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2, minimumFractionDigits: 0 }).format(durationHours);
   }, [eventData]);
 
   const summaryContent = () => {
@@ -119,12 +142,20 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
             <DetailItem label="Zona horaria" value={eventData.timezone} />
           </Grid>
           <Grid item xs={12} md={6}>
+            <DetailItem
+              label="Duración total"
+              value={formattedDuration ? `${formattedDuration} horas` : 'Se calculará cuando existan horarios válidos.'}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
             <DetailItem label="Capacidad" value={formatCapacity(eventData.capacity)} />
           </Grid>
           <Grid item xs={12} md={6}>
             <DetailItem
               label="Política de check-in"
-              value={CHECKIN_POLICY_LABELS[eventData.checkin_policy] ?? eventData.checkin_policy}
+              value={
+                CHECKIN_POLICY_LABELS[eventData.checkin_policy as CheckinPolicy] ?? eventData.checkin_policy
+              }
             />
           </Grid>
           <Grid item xs={12} md={6}>

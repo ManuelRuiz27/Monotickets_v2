@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Container,
   Dialog,
@@ -48,6 +47,7 @@ import {
   useEventsList,
 } from '../../hooks/useEventsApi';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
+import EventStatusChip from './EventStatusChip';
 
 type OrderDirection = 'asc' | 'desc';
 
@@ -63,7 +63,7 @@ const STATUS_OPTIONS: { value: EventStatus; label: string }[] = (
 const formatDate = (iso: string | null | undefined, timezone?: string) => {
   if (!iso) return '—';
   try {
-    return DateTime.fromISO(iso, { zone: timezone ?? undefined }).toFormat('dd/MM/yyyy HH:mm');
+    return DateTime.fromISO(iso, { zone: timezone ?? undefined }).toFormat("dd/MM/yyyy HH:mm 'hrs' (z)");
   } catch {
     return '—';
   }
@@ -283,7 +283,7 @@ const EventsList = () => {
           ) : (
             <>
               <TableContainer>
-                <Table>
+                <Table aria-label="Listado de eventos">
                   <TableHead>
                     <TableRow>
                       <TableCell>Código</TableCell>
@@ -337,11 +337,7 @@ const EventsList = () => {
                         <TableCell>{formatDate(event.start_at, event.timezone)}</TableCell>
                         <TableCell>{formatDate(event.end_at, event.timezone)}</TableCell>
                         <TableCell>
-                          <Chip
-                            label={EVENT_STATUS_LABELS[event.status] ?? event.status}
-                            color={event.status === 'published' ? 'success' : event.status === 'draft' ? 'default' : 'warning'}
-                            size="small"
-                          />
+                          <EventStatusChip status={event.status} />
                         </TableCell>
                         <TableCell>{event.capacity ?? '—'}</TableCell>
                         <TableCell align="right">
@@ -410,7 +406,8 @@ const EventsList = () => {
         <DialogTitle>Archivar evento</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            ¿Deseas archivar "{archiveTarget?.name}"? Podrás consultarlo posteriormente en el historial.
+            ¿Deseas archivar "{archiveTarget?.name}"? El evento dejará de mostrarse para nuevas operaciones y
+            permanecerá sólo como referencia histórica.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -420,6 +417,7 @@ const EventsList = () => {
             variant="contained"
             color="warning"
             disabled={archiveMutation.isPending}
+            autoFocus
           >
             {archiveMutation.isPending ? 'Archivando…' : 'Archivar'}
           </Button>
@@ -439,6 +437,7 @@ const EventsList = () => {
             variant="contained"
             color="error"
             disabled={deleteMutation.isPending}
+            autoFocus
           >
             {deleteMutation.isPending ? 'Eliminando…' : 'Eliminar'}
           </Button>
