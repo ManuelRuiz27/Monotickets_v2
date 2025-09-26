@@ -36,6 +36,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import ArchiveIcon from '@mui/icons-material/Archive';
 import DeleteIcon from '@mui/icons-material/Delete';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { DateTime } from 'luxon';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -344,6 +345,13 @@ const EventsList = () => {
                         </TableCell>
                         <TableCell>{event.capacity ?? '—'}</TableCell>
                         <TableCell align="right">
+                          <Tooltip title="Ver detalle">
+                            <span>
+                              <IconButton aria-label="Ver detalle" size="small" onClick={() => navigate(`/events/${event.id}`)}>
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                           <Tooltip title="Editar">
                             <span>
                               <IconButton
