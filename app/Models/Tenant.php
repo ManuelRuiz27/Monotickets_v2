@@ -1,0 +1,58 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Model;
+
+class Tenant extends Model
+{
+    use HasFactory;
+    use HasUlids;
+    use SoftDeletes;
+
+    /**
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'name',
+        'slug',
+        'status',
+        'plan',
+        'settings_json',
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'settings_json' => 'array',
+    ];
+
+    /**
+     * Get users that belong to the tenant.
+     */
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
+    /**
+     * Get roles defined for the tenant.
+     */
+    public function roles(): HasMany
+    {
+        return $this->hasMany(Role::class);
+    }
+
+    /**
+     * Audit logs for this tenant.
+     */
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(AuditLog::class);
+    }
+}
