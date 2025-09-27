@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Support\ApiResponse;
 use App\Support\Audit\RecordsAuditLogs;
+use App\Support\Logging\StructuredLogging;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -24,6 +25,7 @@ class VenueController extends Controller
 {
     use InteractsWithTenants;
     use RecordsAuditLogs;
+    use StructuredLogging;
 
     /**
      * Display a paginated listing of venues for the given event.
@@ -78,9 +80,36 @@ class VenueController extends Controller
         $venue->save();
         $venue->refresh();
 
+        $venueSnapshot = $this->venueAuditSnapshot($venue);
+
         $this->recordAuditLog($authUser, $request, 'venue', $venue->id, 'created', [
-            'after' => $this->venueAuditSnapshot($venue),
+            'after' => $venueSnapshot,
         ], $event->tenant_id);
+
+        $this->logEntityLifecycle(
+            $request,
+            $authUser,
+            'venue',
+            (string) $venue->id,
+            'created',
+            (string) $event->tenant_id,
+            [
+                'event_id' => $event->id,
+                'after' => $venueSnapshot,
+            ]
+        );
+
+        $this->logLifecycleMetric(
+            $request,
+            $authUser,
+            'venues_created',
+            'venue',
+            (string) $venue->id,
+            (string) $event->tenant_id,
+            [
+                'event_id' => $event->id,
+            ]
+        );
 
         return response()->json([
             'data' => $this->formatVenue($venue),
@@ -146,6 +175,19 @@ class VenueController extends Controller
                 $this->recordAuditLog($authUser, $request, 'venue', $venue->id, 'updated', [
                     'changes' => $changes,
                 ], $event->tenant_id);
+
+                $this->logEntityLifecycle(
+                    $request,
+                    $authUser,
+                    'venue',
+                    (string) $venue->id,
+                    'updated',
+                    (string) $event->tenant_id,
+                    [
+                        'event_id' => $event->id,
+                        'changes' => $changes,
+                    ]
+                );
             }
         }
 
@@ -197,6 +239,20 @@ class VenueController extends Controller
                 $this->recordAuditLog($authUser, $request, 'checkpoint', $checkpoint->id, 'deleted', [
                     'before' => $checkpointSnapshots[$checkpoint->id],
                 ], $event->tenant_id);
+
+                $this->logEntityLifecycle(
+                    $request,
+                    $authUser,
+                    'checkpoint',
+                    (string) $checkpoint->id,
+                    'deleted',
+                    (string) $event->tenant_id,
+                    [
+                        'event_id' => $event->id,
+                        'venue_id' => $venue->id,
+                        'before' => $checkpointSnapshots[$checkpoint->id],
+                    ]
+                );
             }
 
             $venue->delete();
@@ -204,6 +260,19 @@ class VenueController extends Controller
             $this->recordAuditLog($authUser, $request, 'venue', $venue->id, 'deleted', [
                 'before' => $venueSnapshot,
             ], $event->tenant_id);
+
+            $this->logEntityLifecycle(
+                $request,
+                $authUser,
+                'venue',
+                (string) $venue->id,
+                'deleted',
+                (string) $event->tenant_id,
+                [
+                    'event_id' => $event->id,
+                    'before' => $venueSnapshot,
+                ]
+            );
         });
 
         return response()->json(null, 204);

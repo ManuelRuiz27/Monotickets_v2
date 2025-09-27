@@ -11,6 +11,7 @@ use App\Models\Event;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\Audit\RecordsAuditLogs;
+use App\Support\Logging\StructuredLogging;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class EventController extends Controller
 {
     use InteractsWithTenants;
     use RecordsAuditLogs;
+    use StructuredLogging;
 
     /**
      * Display a paginated list of events with filtering capabilities.
@@ -141,9 +143,30 @@ class EventController extends Controller
             return $event->refresh();
         });
 
+        $eventSnapshot = $this->eventAuditSnapshot($event);
+
         $this->recordAuditLog($authUser, $request, 'event', $event->id, 'created', [
-            'after' => $this->eventAuditSnapshot($event),
+            'after' => $eventSnapshot,
         ], $event->tenant_id);
+
+        $this->logEntityLifecycle(
+            $request,
+            $authUser,
+            'event',
+            (string) $event->id,
+            'created',
+            (string) $event->tenant_id,
+            ['after' => $eventSnapshot]
+        );
+
+        $this->logLifecycleMetric(
+            $request,
+            $authUser,
+            'events_created',
+            'event',
+            (string) $event->id,
+            (string) $event->tenant_id
+        );
 
         return response()->json([
             'data' => $this->formatEvent($event),
@@ -247,6 +270,16 @@ class EventController extends Controller
             $this->recordAuditLog($authUser, $request, 'event', $event->id, 'updated', [
                 'changes' => $changes,
             ], $event->tenant_id);
+
+            $this->logEntityLifecycle(
+                $request,
+                $authUser,
+                'event',
+                (string) $event->id,
+                'updated',
+                (string) $event->tenant_id,
+                ['changes' => $changes]
+            );
         }
 
         return response()->json([
@@ -274,6 +307,16 @@ class EventController extends Controller
         $this->recordAuditLog($authUser, $request, 'event', $event->id, 'deleted', [
             'before' => $snapshot,
         ], $event->tenant_id);
+
+        $this->logEntityLifecycle(
+            $request,
+            $authUser,
+            'event',
+            (string) $event->id,
+            'deleted',
+            (string) $event->tenant_id,
+            ['before' => $snapshot]
+        );
 
         return response()->json(null, 204);
     }

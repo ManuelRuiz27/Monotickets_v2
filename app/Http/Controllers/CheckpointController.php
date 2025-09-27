@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Support\ApiResponse;
 use App\Support\Audit\RecordsAuditLogs;
+use App\Support\Logging\StructuredLogging;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -23,6 +24,7 @@ class CheckpointController extends Controller
 {
     use InteractsWithTenants;
     use RecordsAuditLogs;
+    use StructuredLogging;
 
     /**
      * Display a paginated listing of checkpoints for the venue.
@@ -91,9 +93,38 @@ class CheckpointController extends Controller
         $checkpoint->save();
         $checkpoint->refresh();
 
+        $checkpointSnapshot = $this->checkpointAuditSnapshot($checkpoint);
+
         $this->recordAuditLog($authUser, $request, 'checkpoint', $checkpoint->id, 'created', [
-            'after' => $this->checkpointAuditSnapshot($checkpoint),
+            'after' => $checkpointSnapshot,
         ], $event->tenant_id);
+
+        $this->logEntityLifecycle(
+            $request,
+            $authUser,
+            'checkpoint',
+            (string) $checkpoint->id,
+            'created',
+            (string) $event->tenant_id,
+            [
+                'event_id' => $event->id,
+                'venue_id' => $venue->id,
+                'after' => $checkpointSnapshot,
+            ]
+        );
+
+        $this->logLifecycleMetric(
+            $request,
+            $authUser,
+            'checkpoints_created',
+            'checkpoint',
+            (string) $checkpoint->id,
+            (string) $event->tenant_id,
+            [
+                'event_id' => $event->id,
+                'venue_id' => $venue->id,
+            ]
+        );
 
         return response()->json([
             'data' => $this->formatCheckpoint($checkpoint),
@@ -171,6 +202,20 @@ class CheckpointController extends Controller
                 $this->recordAuditLog($authUser, $request, 'checkpoint', $checkpoint->id, 'updated', [
                     'changes' => $changes,
                 ], $event->tenant_id);
+
+                $this->logEntityLifecycle(
+                    $request,
+                    $authUser,
+                    'checkpoint',
+                    (string) $checkpoint->id,
+                    'updated',
+                    (string) $event->tenant_id,
+                    [
+                        'event_id' => $event->id,
+                        'venue_id' => $venue->id,
+                        'changes' => $changes,
+                    ]
+                );
             }
         }
 
@@ -211,6 +256,20 @@ class CheckpointController extends Controller
         $this->recordAuditLog($authUser, $request, 'checkpoint', $checkpoint->id, 'deleted', [
             'before' => $snapshot,
         ], $event->tenant_id);
+
+        $this->logEntityLifecycle(
+            $request,
+            $authUser,
+            'checkpoint',
+            (string) $checkpoint->id,
+            'deleted',
+            (string) $event->tenant_id,
+            [
+                'event_id' => $event->id,
+                'venue_id' => $venue->id,
+                'before' => $snapshot,
+            ]
+        );
 
         return response()->json(null, 204);
     }
