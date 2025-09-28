@@ -1,5 +1,6 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchHostessAssignments, registerHostessDevice } from '../api/hostess';
+import QrScanner from '../components/scans/QrScanner';
 import { useHostessStore } from '../hostess/store';
 import type { HostessCheckpoint, HostessEvent, HostessVenue } from '../hostess/types';
 import { extractApiErrorMessage } from '../utils/apiErrors';
@@ -238,6 +239,19 @@ const Hostess = () => {
               </li>
             </ul>
           </div>
+        )}
+      </section>
+
+      <section className="scanner-section">
+        <h2>Escaneo de tickets</h2>
+        {!device && <p>Registra este dispositivo para habilitar el escaneo.</p>}
+        {!currentEvent && <p>Selecciona un evento para comenzar a escanear.</p>}
+        {device && currentEvent && (
+          <QrScanner
+            eventId={currentEvent.id}
+            checkpointId={currentCheckpoint?.id ?? null}
+            deviceId={device.id}
+          />
         )}
       </section>
     </div>

@@ -15,6 +15,7 @@
     "@tanstack/react-table": "^8.9.3",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.5",
+    "@zxing/browser": "^0.1.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.3",
