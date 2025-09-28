@@ -14,6 +14,7 @@ class Kernel extends HttpKernel
      */
     protected $middlewareGroups = [
         'api' => [
+            \App\Http\Middleware\EnsureHttps::class,
             \App\Http\Middleware\EnsureJsonRequest::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,

@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import type { AttendanceCacheRecord } from '../../services/scanSync';
+import { maskSensitiveText } from '../../utils/privacy';
 
 interface ScanHistoryProps {
   history: AttendanceCacheRecord[];
@@ -37,7 +38,9 @@ const ScanHistory = ({ history, pendingCount }: ScanHistoryProps) => {
                 <span className="scan-history__code">{item.qr_code}</span>
                 <span className="scan-history__timestamp">{formatTimestamp(item.scanned_at)}</span>
               </div>
-              <p className="scan-history__message">{item.message ?? `Resultado: ${item.result}`}</p>
+              <p className="scan-history__message">
+                {maskSensitiveText(item.message ?? `Resultado: ${item.result}`)}
+              </p>
               <div className="scan-history__badges">
                 <span className={`scan-history__badge scan-history__badge--${item.status}`}>
                   {item.status === 'pending' ? 'Pendiente' : 'Sincronizado'}
@@ -48,7 +51,9 @@ const ScanHistory = ({ history, pendingCount }: ScanHistoryProps) => {
                 {item.offline && (
                   <span className="scan-history__badge scan-history__badge--offline">Registrado offline</span>
                 )}
-                {item.reason && <span className="scan-history__reason">{item.reason}</span>}
+                {item.reason && (
+                  <span className="scan-history__reason">{maskSensitiveText(item.reason)}</span>
+                )}
               </div>
             </li>
           ))}

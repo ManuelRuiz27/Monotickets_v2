@@ -1,7 +1,17 @@
-function bufferToHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+import nacl from 'tweetnacl';
+import { base64ToUint8Array, sha256HexFromString, uint8ArrayToBase64 } from './crypto';
+
+function getEncryptionKey(): Uint8Array {
+  const key = import.meta.env.VITE_FINGERPRINT_ENCRYPTION_KEY as string | undefined;
+  if (!key) {
+    throw new Error('No se configuró la clave de cifrado para el fingerprint.');
+  }
+
+  const bytes = base64ToUint8Array(key);
+  if (bytes.length !== nacl.secretbox.keyLength) {
+    throw new Error('La clave de cifrado del fingerprint es inválida.');
+  }
+  return bytes;
 }
 
 function drawFingerprintCanvas(userAgent: string): string {
@@ -38,9 +48,25 @@ export async function generateDeviceFingerprint(): Promise<string> {
 
   const canvasData = typeof document !== 'undefined' ? drawFingerprintCanvas(userAgent) : 'no-document';
   const rawFingerprint = `${userAgent}|${timeZone}|${canvasData}`;
-  const encoded = new TextEncoder().encode(rawFingerprint);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
-  return bufferToHex(hashBuffer);
+  return sha256HexFromString(rawFingerprint);
+}
+
+export async function encryptFingerprintPayload(value: string): Promise<string> {
+  const key = getEncryptionKey();
+  const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+  const message = new TextEncoder().encode(value);
+  const encrypted = nacl.secretbox(message, nonce, key);
+
+  const payload = new Uint8Array(nonce.length + encrypted.length);
+  payload.set(nonce, 0);
+  payload.set(encrypted, nonce.length);
+
+  return uint8ArrayToBase64(payload);
+}
+
+export async function generateEncryptedFingerprint(): Promise<string> {
+  const fingerprint = await generateDeviceFingerprint();
+  return encryptFingerprintPayload(fingerprint);
 }
 
 export function resolveDeviceName(): string {

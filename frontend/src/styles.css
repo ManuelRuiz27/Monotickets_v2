@@ -308,6 +308,142 @@ textarea::placeholder {
   margin: 0.25rem 0;
 }
 
+.lock-controls {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.lock-controls h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.lock-controls__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.lock-controls button {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 0.45rem 1.25rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.lock-controls button:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: rgba(56, 189, 248, 0.6);
+}
+
+.hostess-lock-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 1000;
+}
+
+.hostess-lock-overlay--light {
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.hostess-lock-card {
+  width: min(100%, 420px);
+  background: rgba(15, 23, 42, 0.95);
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 0 35px 60px rgba(2, 6, 23, 0.6);
+  display: grid;
+  gap: 1rem;
+}
+
+.hostess-lock-card h2 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.hostess-lock-card p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.hostess-lock-card__form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.hostess-lock-card__form label {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.hostess-lock-card__form input {
+  border-radius: 0.75rem;
+  border: 2px solid transparent;
+  padding: 0.85rem 1rem;
+  font-size: 1.3rem;
+  letter-spacing: 0.25rem;
+  text-align: center;
+}
+
+.hostess-lock-card__error {
+  margin: 0;
+  color: #fecaca;
+  font-size: 0.95rem;
+}
+
+.hostess-lock-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.hostess-lock-card__primary {
+  background: rgba(56, 189, 248, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: var(--text-primary);
+  border-radius: 0.75rem;
+  padding: 0.65rem 1.5rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.hostess-lock-card__secondary {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: var(--text-secondary);
+  border-radius: 0.75rem;
+  padding: 0.65rem 1.5rem;
+  cursor: pointer;
+}
+
+.hostess-lock-card__primary:hover {
+  background: rgba(56, 189, 248, 0.4);
+  border-color: rgba(56, 189, 248, 0.7);
+}
+
+.hostess-lock-card__secondary:hover {
+  border-color: rgba(148, 163, 184, 0.6);
+  color: var(--text-primary);
+}
+
+.hostess-content--blurred {
+  filter: blur(1.5px);
+}
+
 .selectors {
   display: grid;
   gap: 1rem;

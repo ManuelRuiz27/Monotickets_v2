@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { type ScanRequest, type ScanResponsePayload } from '../../api/scan';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
 import { processScan } from '../../services/scanSync';
+import { maskSensitiveText } from '../../utils/privacy';
 
 const RESULT_VARIANT: Record<string, 'valid' | 'warning' | 'invalid' | 'info'> = {
   valid: 'valid',
@@ -223,6 +224,13 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       return;
     }
 
+    if (typeof window !== 'undefined') {
+      if (!window.isSecureContext || window.location.protocol !== 'https:') {
+        setCameraError('La cámara requiere un contexto seguro y conexión mediante HTTPS.');
+        return;
+      }
+    }
+
     const videoElement = videoRef.current;
     if (!videoElement) {
       return;
@@ -245,9 +253,15 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
     controlsRef.current?.stop();
     codeReader.reset();
 
+    let mediaStream: MediaStream | null = null;
     try {
-      const controls = await codeReader.decodeFromVideoDevice(
-        undefined,
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      });
+      videoElement.srcObject = mediaStream;
+      const controls = await codeReader.decodeFromStream(
+        mediaStream,
         videoElement,
         (result, error, controlsParam) => {
           if (controlsParam) {
@@ -274,6 +288,11 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       }
     } catch (error) {
       console.error('No se pudo iniciar la cámara', error);
+      mediaStream?.getTracks().forEach((track) => track.stop());
+      if (videoElement.srcObject) {
+        (videoElement.srcObject as MediaStream).getTracks().forEach((track) => track.stop());
+        videoElement.srcObject = null;
+      }
       setCameraError('No se pudo acceder a la cámara. Verifica los permisos del navegador.');
     }
   }, []);
@@ -466,7 +485,9 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       </form>
 
       {scanMutation.isPending && <p className="qr-scanner__status">Procesando escaneo...</p>}
-      {ignoredMessage && <p className="qr-scanner__status qr-scanner__status--muted">{ignoredMessage}</p>}
+      {ignoredMessage && (
+        <p className="qr-scanner__status qr-scanner__status--muted">{maskSensitiveText(ignoredMessage)}</p>
+      )}
 
       {lastResult && (
         <div className={`scan-result-card scan-result-card--${lastResultVariant}`}>
@@ -474,13 +495,15 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
           <h3 className="scan-result-card__guest">
             {lastResult.ticket?.guest?.full_name ?? 'Invitado sin nombre'}
           </h3>
-          <p className="scan-result-card__message">{lastResult.message}</p>
+          <p className="scan-result-card__message">{maskSensitiveText(lastResult.message)}</p>
           <div className="scan-result-card__meta">
             <span>Código: {lastResult.qr_code}</span>
             {lastAttendanceTime && <span>Último escaneo: {lastAttendanceTime}</span>}
           </div>
           {lastResult.reason && (
-            <p className="scan-result-card__reason">Código interno: {lastResult.reason}</p>
+            <p className="scan-result-card__reason">
+              Código interno: {maskSensitiveText(lastResult.reason)}
+            </p>
           )}
         </div>
       )}
@@ -488,7 +511,7 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       {lastError && (
         <div className="scan-result-card scan-result-card--error">
           <span className="scan-result-card__badge">Error</span>
-          <p className="scan-result-card__message">{lastError}</p>
+          <p className="scan-result-card__message">{maskSensitiveText(lastError)}</p>
         </div>
       )}
     </div>

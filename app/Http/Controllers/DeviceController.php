@@ -7,6 +7,8 @@ use App\Http\Requests\Device\DeviceRegisterRequest;
 use App\Models\Device;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use RuntimeException;
+use Throwable;
 
 /**
  * Handle device registration and tracking operations.
@@ -33,7 +35,19 @@ class DeviceController extends Controller
         }
 
         $payload = $request->validated();
-        $fingerprintHash = hash('sha256', $payload['fingerprint']);
+
+        try {
+            $fingerprintPlain = $this->decryptFingerprint($payload['fingerprint']);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            $this->throwValidationException([
+                'fingerprint' => ['No se pudo procesar el identificador del dispositivo.'],
+            ]);
+        }
+
+        $fingerprintHash = hash('sha256', $fingerprintPlain);
+        sodium_memzero($fingerprintPlain);
 
         $device = Device::query()->updateOrCreate(
             [
@@ -75,5 +89,39 @@ class DeviceController extends Controller
             'created_at' => $device->created_at?->toAtomString(),
             'updated_at' => $device->updated_at?->toAtomString(),
         ];
+}
+
+    /**
+     * Decrypt a fingerprint payload using the configured symmetric key.
+     */
+    private function decryptFingerprint(string $payload): string
+    {
+        $keyEncoded = config('fingerprint.encryption_key');
+        if (!is_string($keyEncoded) || $keyEncoded === '') {
+            throw new RuntimeException('Fingerprint encryption key is not configured.');
+        }
+
+        $key = base64_decode($keyEncoded, true);
+        if (!is_string($key) || strlen($key) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
+            throw new RuntimeException('Fingerprint encryption key has an invalid length.');
+        }
+
+        $decoded = base64_decode($payload, true);
+        if (!is_string($decoded) || strlen($decoded) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) {
+            throw new RuntimeException('Fingerprint payload is invalid.');
+        }
+
+        $nonce = substr($decoded, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $ciphertext = substr($decoded, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+
+        $fingerprint = sodium_crypto_secretbox_open($ciphertext, $nonce, $key);
+        sodium_memzero($ciphertext);
+        sodium_memzero($key);
+
+        if ($fingerprint === false) {
+            throw new RuntimeException('Unable to decrypt fingerprint payload.');
+        }
+
+        return $fingerprint;
     }
 }

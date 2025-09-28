@@ -39,6 +39,11 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
    php -r "echo bin2hex(random_bytes(32));"
    ```
    e introducir el resultado en `APP_KEY`.
+   Genera también una clave simétrica en base64 para proteger el fingerprint de dispositivos:
+   ```powershell
+   php -r "echo base64_encode(random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES));"
+   ```
+   Usa el mismo valor en `FINGERPRINT_ENCRYPTION_KEY` dentro de `.env` y en `VITE_FINGERPRINT_ENCRYPTION_KEY` dentro de `frontend/.env`.
 
 ### 1.3. Puesta en marcha con Docker
 
@@ -126,6 +131,10 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
 3. Configurar variables en `.env` (APP_KEY, configuración de base de datos, JWT, correo). Generar APP_KEY:
    ```bash
    php -r "echo bin2hex(random_bytes(32));"
+   ```
+   Generar la clave simétrica para el fingerprint (en base64) y reutilizarla en la variable `VITE_FINGERPRINT_ENCRYPTION_KEY` del frontend:
+   ```bash
+   php -r "echo base64_encode(random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES));"
    ```
 
 ### 2.4. Despliegue con Docker Compose
