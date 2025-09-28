@@ -18,6 +18,36 @@ import {
   useScanSync,
 } from '../services/scanSync';
 
+const LAST_CHECKPOINT_KEY = 'monotickets:lastCheckpoint';
+
+interface PersistedSelection {
+  eventId: string | null;
+  venueId: string | null;
+  checkpointId: string | null;
+}
+
+const readPersistedSelection = (): PersistedSelection | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(LAST_CHECKPOINT_KEY);
+    if (!stored) {
+      return null;
+    }
+    const parsed = JSON.parse(stored) as PersistedSelection;
+    return {
+      eventId: parsed.eventId ?? null,
+      venueId: parsed.venueId ?? null,
+      checkpointId: parsed.checkpointId ?? null,
+    };
+  } catch (error) {
+    console.warn('No se pudo leer la selección guardada del checkpoint.', error);
+    return null;
+  }
+};
+
 const Hostess = () => {
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
@@ -130,6 +160,20 @@ const Hostess = () => {
         return;
       }
 
+      const persisted = readPersistedSelection();
+      if (persisted?.eventId) {
+        const eventExists = data.some(
+          (assignment) => (assignment.event?.id ?? assignment.event_id) === persisted.eventId
+        );
+
+        if (eventExists) {
+          selectEvent(persisted.eventId);
+          selectVenue(persisted.venueId ?? null);
+          selectCheckpoint(persisted.checkpointId ?? null);
+          return;
+        }
+      }
+
       const desiredEventId = currentEvent?.id ?? data[0].event?.id ?? data[0].event_id;
       selectEvent(desiredEventId ?? null);
     } catch (error) {
@@ -137,7 +181,7 @@ const Hostess = () => {
     } finally {
       setAssignmentsLoading(false);
     }
-  }, [currentEvent?.id, selectEvent, setAssignments]);
+  }, [currentEvent?.id, selectCheckpoint, selectEvent, selectVenue, setAssignments]);
 
   const handleDeviceRegistration = useCallback(async () => {
     setDeviceLoading(true);
@@ -166,6 +210,25 @@ const Hostess = () => {
       void handleDeviceRegistration();
     }
   }, [device, deviceLoading, handleDeviceRegistration]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (!currentEvent) {
+      window.localStorage.removeItem(LAST_CHECKPOINT_KEY);
+      return;
+    }
+
+    const payload: PersistedSelection = {
+      eventId: currentEvent.id,
+      venueId: currentVenue?.id ?? null,
+      checkpointId: currentCheckpoint?.id ?? null,
+    };
+
+    window.localStorage.setItem(LAST_CHECKPOINT_KEY, JSON.stringify(payload));
+  }, [currentCheckpoint, currentEvent, currentVenue]);
 
   const handleEventChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value || null;
