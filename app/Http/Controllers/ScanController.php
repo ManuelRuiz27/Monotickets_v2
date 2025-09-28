@@ -17,6 +17,7 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use function optional;
 
@@ -28,6 +29,8 @@ class ScanController extends Controller
     use InteractsWithTenants;
     use RecordsAuditLogs;
     use StructuredLogging;
+
+    private const TRY_AGAIN_MESSAGE = 'try_again';
 
     private DatabaseManager $db;
 
@@ -53,9 +56,51 @@ class ScanController extends Controller
             'event_id' => ['nullable', 'uuid'],
         ]);
 
-        $result = $this->handleScan($request, $authUser, $validated, false);
+        $startedAt = microtime(true);
+
+        try {
+            $result = $this->handleScan($request, $authUser, $validated, false, $startedAt);
+        } catch (HttpExceptionInterface $exception) {
+            if ($this->isDatabaseTimeoutException($exception)) {
+                return response()->json(['error' => self::TRY_AGAIN_MESSAGE], 503);
+            }
+
+            throw $exception;
+        }
 
         if ($result === null) {
+            $latencyMs = $this->calculateLatencyMs($startedAt);
+
+            $this->logScanStructured(
+                $request,
+                $authUser,
+                null,
+                null,
+                null,
+                'invalid',
+                $latencyMs,
+                $validated['device_id'] ?? null,
+                [
+                    'qr_code' => (string) $validated['qr_code'],
+                    'reason' => 'qr_not_found',
+                ]
+            );
+
+            $tenantContext = $this->resolveTenantContext($request, $authUser) ?? 'unknown';
+
+            $this->logLifecycleMetric(
+                $request,
+                $authUser,
+                'scan_invalid',
+                'scan',
+                (string) $validated['qr_code'],
+                (string) $tenantContext,
+                [
+                    'result' => 'invalid',
+                    'reason' => 'qr_not_found',
+                ]
+            );
+
             return response()->json([
                 'data' => $this->formatUnknownQrResponse((string) $validated['qr_code']),
             ]);
@@ -110,10 +155,15 @@ class ScanController extends Controller
         foreach ($scans as $scan) {
             $index = $scan['index'];
             $payload = $scan['payload'];
+            $startedAt = microtime(true);
 
             try {
-                $result = $this->handleScan($request, $authUser, $payload, true);
+                $result = $this->handleScan($request, $authUser, $payload, true, $startedAt);
             } catch (HttpExceptionInterface $exception) {
+                if ($this->isDatabaseTimeoutException($exception)) {
+                    return response()->json(['error' => self::TRY_AGAIN_MESSAGE], 503);
+                }
+
                 $responses[] = [
                     'index' => $index,
                     'status' => $exception->getStatusCode(),
@@ -134,6 +184,38 @@ class ScanController extends Controller
                 $responses[] = $response;
                 ++$summary['errors'];
 
+                $latencyMs = $this->calculateLatencyMs($startedAt);
+                $this->logScanStructured(
+                    $request,
+                    $authUser,
+                    null,
+                    null,
+                    null,
+                    'invalid',
+                    $latencyMs,
+                    $payload['device_id'] ?? null,
+                    [
+                        'qr_code' => (string) $payload['qr_code'],
+                        'reason' => 'qr_not_found',
+                        'batch_index' => $index,
+                    ]
+                );
+
+                $tenantContext = $this->resolveTenantContext($request, $authUser) ?? 'unknown';
+
+                $this->logLifecycleMetric(
+                    $request,
+                    $authUser,
+                    'scan_invalid',
+                    'scan',
+                    (string) $payload['qr_code'],
+                    (string) $tenantContext,
+                    [
+                        'result' => 'invalid',
+                        'reason' => 'qr_not_found',
+                    ]
+                );
+
                 continue;
             }
 
@@ -147,6 +229,21 @@ class ScanController extends Controller
                 ++$summary['errors'];
             }
         }
+
+        $tenantContext = $this->resolveTenantContext($request, $authUser);
+
+        $this->recordAuditLog(
+            $authUser,
+            $request,
+            'scan_sync',
+            (string) $authUser->id,
+            'sync_batch_uploaded',
+            [
+                'summary' => $summary,
+                'total_scans' => count($responses),
+            ],
+            $tenantContext
+        );
 
         return response()->json([
             'data' => $responses,
@@ -162,7 +259,7 @@ class ScanController extends Controller
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>|null
      */
-    private function handleScan(Request $request, User $authUser, array $payload, bool $forceOffline): ?array
+    private function handleScan(Request $request, User $authUser, array $payload, bool $forceOffline, float $startedAt): ?array
     {
         $scanTime = CarbonImmutable::parse((string) $payload['scanned_at']);
         $offline = $forceOffline ? true : (bool) ($payload['offline'] ?? false);
@@ -171,68 +268,30 @@ class ScanController extends Controller
         $checkpointId = isset($payload['checkpoint_id']) ? (string) $payload['checkpoint_id'] : null;
         $eventHint = isset($payload['event_id']) ? (string) $payload['event_id'] : null;
 
-        $qr = Qr::query()
-            ->with(['ticket' => function ($query): void {
-                $query->with(['event', 'guest']);
-            }])
-            ->where('code', $qrCode)
-            ->first();
-
-        if ($qr === null || $qr->ticket === null || $qr->ticket->event === null) {
-            return null;
-        }
-
-        $ticket = $qr->ticket;
-        $event = $ticket->event;
-        $tenantId = (string) $event->tenant_id;
-        $tenantContext = $this->resolveTenantContext($request, $authUser);
-
-        if ($tenantContext !== null && $tenantContext !== $tenantId && ! $this->isSuperAdmin($authUser)) {
-            return $this->finalizeScan(
-                $request,
-                $authUser,
-                $ticket,
-                $event,
-                $qr,
-                'invalid',
-                'The ticket does not belong to the active tenant.',
-                $scanTime,
-                $offline,
-                $deviceId,
-                null,
-                [
-                    'reason' => 'tenant_mismatch',
-                    'provided_event_id' => $eventHint,
-                ]
-            );
-        }
-
-        if ($eventHint !== null && $eventHint !== $event->id) {
-            return $this->finalizeScan(
-                $request,
-                $authUser,
-                $ticket,
-                $event,
-                $qr,
-                'invalid',
-                'The ticket belongs to a different event.',
-                $scanTime,
-                $offline,
-                $deviceId,
-                null,
-                [
-                    'reason' => 'event_mismatch',
-                    'provided_event_id' => $eventHint,
-                ]
-            );
-        }
-
+        $ticket = null;
+        $event = null;
         $checkpoint = null;
 
-        if ($checkpointId !== null) {
-            $checkpoint = Checkpoint::query()->whereKey($checkpointId)->first();
+        try {
+            $qr = Qr::query()
+                ->with(['ticket' => function ($query): void {
+                    $query->with(['event', 'guest']);
+                }])
+                ->where('code', $qrCode)
+                ->first();
 
-            if ($checkpoint === null || $checkpoint->event_id !== $event->id) {
+            $this->ensureDatabaseWithinTimeout($startedAt);
+
+            if ($qr === null || $qr->ticket === null || $qr->ticket->event === null) {
+                return null;
+            }
+
+            $ticket = $qr->ticket;
+            $event = $ticket->event;
+            $tenantId = (string) $event->tenant_id;
+            $tenantContext = $this->resolveTenantContext($request, $authUser);
+
+            if ($tenantContext !== null && $tenantContext !== $tenantId && ! $this->isSuperAdmin($authUser)) {
                 return $this->finalizeScan(
                     $request,
                     $authUser,
@@ -240,147 +299,230 @@ class ScanController extends Controller
                     $event,
                     $qr,
                     'invalid',
-                    'The checkpoint is not valid for this event.',
+                    'The ticket does not belong to the active tenant.',
                     $scanTime,
                     $offline,
                     $deviceId,
                     null,
                     [
-                        'reason' => 'checkpoint_invalid',
-                        'provided_checkpoint_id' => $checkpointId,
-                    ]
+                        'reason' => 'tenant_mismatch',
+                        'provided_event_id' => $eventHint,
+                    ],
+                    $startedAt
                 );
             }
-        }
 
-        if (! $this->hostessHasActiveAssignment($authUser, $event, $checkpoint, $scanTime)) {
-            abort(403, 'The hostess is not assigned to this event or checkpoint.');
-        }
+            if ($eventHint !== null && $eventHint !== $event->id) {
+                return $this->finalizeScan(
+                    $request,
+                    $authUser,
+                    $ticket,
+                    $event,
+                    $qr,
+                    'invalid',
+                    'The ticket belongs to a different event.',
+                    $scanTime,
+                    $offline,
+                    $deviceId,
+                    null,
+                    [
+                        'reason' => 'event_mismatch',
+                        'provided_event_id' => $eventHint,
+                    ],
+                    $startedAt
+                );
+            }
 
-        if ($existingAttendance = $this->findExistingAttendance($ticket, $event, $scanTime, $deviceId)) {
-            return $this->buildResponseFromAttendance($ticket, $qr, $existingAttendance);
-        }
+            if ($checkpointId !== null) {
+                $checkpoint = Checkpoint::query()->whereKey($checkpointId)->first();
 
-        if (! $qr->is_active) {
-            return $this->finalizeScan(
-                $request,
-                $authUser,
-                $ticket,
-                $event,
-                $qr,
-                'invalid',
-                'The QR code is inactive.',
-                $scanTime,
-                $offline,
-                $deviceId,
-                $checkpoint,
-                [
-                    'reason' => 'qr_inactive',
-                ]
-            );
-        }
+                $this->ensureDatabaseWithinTimeout($startedAt);
 
-        if ($ticket->status === 'revoked') {
-            return $this->finalizeScan(
-                $request,
-                $authUser,
-                $ticket,
-                $event,
-                $qr,
-                'revoked',
-                'The ticket has been revoked.',
-                $scanTime,
-                $offline,
-                $deviceId,
-                $checkpoint,
-                [
-                    'reason' => 'ticket_revoked',
-                ]
-            );
-        }
-
-        $isExpired = $ticket->status === 'expired';
-
-        if ($ticket->expires_at !== null && $scanTime->greaterThan($ticket->expires_at)) {
-            $isExpired = true;
-        }
-
-        if ($isExpired) {
-            return $this->finalizeScan(
-                $request,
-                $authUser,
-                $ticket,
-                $event,
-                $qr,
-                'expired',
-                'The ticket has expired.',
-                $scanTime,
-                $offline,
-                $deviceId,
-                $checkpoint,
-                [
-                    'reason' => 'ticket_expired',
-                ]
-            );
-        }
-
-        $event->loadMissing('attendances');
-
-        $lastValidAttendance = Attendance::query()
-            ->where('ticket_id', $ticket->id)
-            ->where('result', 'valid')
-            ->latest('scanned_at')
-            ->first();
-
-        $hasValidAttendance = $lastValidAttendance !== null;
-        $isDuplicate = $event->checkin_policy === 'single' && ($hasValidAttendance || $ticket->status === 'used');
-
-        if ($isDuplicate) {
-            $metadata = [
-                'reason' => 'duplicate_entry',
-            ];
-
-            if ($lastValidAttendance !== null && $lastValidAttendance->scanned_at !== null) {
-                $lastValidAt = CarbonImmutable::parse($lastValidAttendance->scanned_at->toIso8601String());
-                $secondsSinceLastValid = $scanTime->diffInRealSeconds($lastValidAt);
-
-                if ($secondsSinceLastValid < $this->duplicateGraceSeconds()) {
-                    $metadata['last_validated_at'] = $lastValidAt->toIso8601String();
+                if ($checkpoint === null || $checkpoint->event_id !== $event->id) {
+                    return $this->finalizeScan(
+                        $request,
+                        $authUser,
+                        $ticket,
+                        $event,
+                        $qr,
+                        'invalid',
+                        'The checkpoint is not valid for this event.',
+                        $scanTime,
+                        $offline,
+                        $deviceId,
+                        null,
+                        [
+                            'reason' => 'checkpoint_invalid',
+                            'provided_checkpoint_id' => $checkpointId,
+                        ],
+                        $startedAt
+                    );
                 }
             }
 
+            if (! $this->hostessHasActiveAssignment($authUser, $event, $checkpoint, $scanTime)) {
+                $this->logScanFailure($request, $authUser, $payload, $event, $ticket, $checkpoint, $startedAt, 'hostess_assignment_missing', 403);
+                $this->recordScanErrorMetric($request, $authUser, $payload, $event);
+
+                throw new HttpException(403, 'The hostess is not assigned to this event or checkpoint.');
+            }
+
+            $this->ensureDatabaseWithinTimeout($startedAt);
+
+            if ($existingAttendance = $this->findExistingAttendance($ticket, $event, $scanTime, $deviceId)) {
+                $this->ensureDatabaseWithinTimeout($startedAt);
+
+                return $this->buildResponseFromAttendance(
+                    $request,
+                    $authUser,
+                    $ticket,
+                    $event,
+                    $qr,
+                    $existingAttendance,
+                    $startedAt,
+                    $offline,
+                    $deviceId,
+                    $checkpoint
+                );
+            }
+
+            if (! $qr->is_active) {
+                return $this->finalizeScan(
+                    $request,
+                    $authUser,
+                    $ticket,
+                    $event,
+                    $qr,
+                    'invalid',
+                    'The QR code is inactive.',
+                    $scanTime,
+                    $offline,
+                    $deviceId,
+                    $checkpoint,
+                    [
+                        'reason' => 'qr_inactive',
+                    ],
+                    $startedAt
+                );
+            }
+
+            if ($ticket->status === 'revoked') {
+                return $this->finalizeScan(
+                    $request,
+                    $authUser,
+                    $ticket,
+                    $event,
+                    $qr,
+                    'revoked',
+                    'The ticket has been revoked.',
+                    $scanTime,
+                    $offline,
+                    $deviceId,
+                    $checkpoint,
+                    [
+                        'reason' => 'ticket_revoked',
+                    ],
+                    $startedAt
+                );
+            }
+
+            $isExpired = $ticket->status === 'expired';
+
+            if ($ticket->expires_at !== null && $scanTime->greaterThan($ticket->expires_at)) {
+                $isExpired = true;
+            }
+
+            if ($isExpired) {
+                return $this->finalizeScan(
+                    $request,
+                    $authUser,
+                    $ticket,
+                    $event,
+                    $qr,
+                    'expired',
+                    'The ticket has expired.',
+                    $scanTime,
+                    $offline,
+                    $deviceId,
+                    $checkpoint,
+                    [
+                        'reason' => 'ticket_expired',
+                    ],
+                    $startedAt
+                );
+            }
+
+            $event->loadMissing('attendances');
+
+            $this->ensureDatabaseWithinTimeout($startedAt);
+
+            $lastValidAttendance = Attendance::query()
+                ->where('ticket_id', $ticket->id)
+                ->where('result', 'valid')
+                ->latest('scanned_at')
+                ->first();
+
+            $this->ensureDatabaseWithinTimeout($startedAt);
+
+            $hasValidAttendance = $lastValidAttendance !== null;
+            $isDuplicate = $event->checkin_policy === 'single' && ($hasValidAttendance || $ticket->status === 'used');
+
+            if ($isDuplicate) {
+                $metadata = [
+                    'reason' => 'duplicate_entry',
+                ];
+
+                if ($lastValidAttendance !== null && $lastValidAttendance->scanned_at !== null) {
+                    $lastValidAt = CarbonImmutable::parse($lastValidAttendance->scanned_at->toIso8601String());
+                    $secondsSinceLastValid = $scanTime->diffInRealSeconds($lastValidAt);
+
+                    if ($secondsSinceLastValid < $this->duplicateGraceSeconds()) {
+                        $metadata['last_validated_at'] = $lastValidAt->toIso8601String();
+                    }
+                }
+
+                return $this->finalizeScan(
+                    $request,
+                    $authUser,
+                    $ticket,
+                    $event,
+                    $qr,
+                    'duplicate',
+                    'The ticket has already been used.',
+                    $scanTime,
+                    $offline,
+                    $deviceId,
+                    $checkpoint,
+                    $metadata,
+                    $startedAt
+                );
+            }
+
             return $this->finalizeScan(
                 $request,
                 $authUser,
                 $ticket,
                 $event,
                 $qr,
-                'duplicate',
-                'The ticket has already been used.',
+                'valid',
+                'The ticket is valid.',
                 $scanTime,
                 $offline,
                 $deviceId,
                 $checkpoint,
-                $metadata
+                [
+                    'reason' => 'accepted',
+                ],
+                $startedAt
             );
-        }
+        } catch (HttpExceptionInterface $exception) {
+            if ($this->isDatabaseTimeoutException($exception)) {
+                $this->logScanFailure($request, $authUser, $payload, $event, $ticket, $checkpoint, $startedAt, self::TRY_AGAIN_MESSAGE, $exception->getStatusCode());
+                $this->recordScanErrorMetric($request, $authUser, $payload, $event);
+            }
 
-        return $this->finalizeScan(
-            $request,
-            $authUser,
-            $ticket,
-            $event,
-            $qr,
-            'valid',
-            'The ticket is valid.',
-            $scanTime,
-            $offline,
-            $deviceId,
-            $checkpoint,
-            [
-                'reason' => 'accepted',
-            ]
-        );
+            throw $exception;
+        }
     }
 
     /**
@@ -401,7 +543,8 @@ class ScanController extends Controller
         bool $offline,
         ?string $deviceId,
         ?Checkpoint $checkpoint,
-        array $metadata
+        array $metadata,
+        float $startedAt
     ): array {
         return $this->db->transaction(function () use (
             $request,
@@ -415,8 +558,11 @@ class ScanController extends Controller
             $offline,
             $deviceId,
             $checkpoint,
-            $metadata
+            $metadata,
+            $startedAt
         ): array {
+            $this->ensureDatabaseWithinTimeout($startedAt);
+
             $ticket = Ticket::query()->whereKey($ticket->id)->lockForUpdate()->firstOrFail();
 
             if ($result === 'valid' && $ticket->status !== 'used') {
@@ -430,6 +576,8 @@ class ScanController extends Controller
                 $ticket->save();
                 $ticket->refresh();
             }
+
+            $this->ensureDatabaseWithinTimeout($startedAt);
 
             $attendance = Attendance::query()->create([
                 'event_id' => $event->id,
@@ -446,6 +594,8 @@ class ScanController extends Controller
                 ]), static fn ($value) => $value !== null),
             ]);
 
+            $this->ensureDatabaseWithinTimeout($startedAt);
+
             $tenantId = (string) $event->tenant_id;
             $action = sprintf('scan_%s', $result);
 
@@ -457,6 +607,8 @@ class ScanController extends Controller
                 'offline' => $offline,
                 'metadata' => $metadata,
             ], $tenantId);
+
+            $this->ensureDatabaseWithinTimeout($startedAt);
 
             $this->logEntityLifecycle(
                 $request,
@@ -485,7 +637,25 @@ class ScanController extends Controller
                 [
                     'event_id' => $event->id,
                     'guest_id' => $ticket->guest_id,
-                    'result' => $result,
+                'result' => $result,
+            ]
+            );
+
+            $latencyMs = $this->calculateLatencyMs($startedAt);
+
+            $this->logScanStructured(
+                $request,
+                $authUser,
+                $event,
+                $ticket,
+                $checkpoint,
+                $result,
+                $latencyMs,
+                $deviceId,
+                [
+                    'qr_code' => $qr->code,
+                    'message' => $message,
+                    'offline' => $offline,
                 ]
             );
 
@@ -554,19 +724,60 @@ class ScanController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function buildResponseFromAttendance(Ticket $ticket, Qr $qr, Attendance $attendance): array
+    private function buildResponseFromAttendance(
+        Request $request,
+        User $authUser,
+        Ticket $ticket,
+        Event $event,
+        Qr $qr,
+        Attendance $attendance,
+        float $startedAt,
+        bool $offline,
+        ?string $deviceId,
+        ?Checkpoint $checkpoint
+    ): array
     {
         $metadata = $attendance->metadata_json ?? [];
+        $attendance = $attendance->fresh(['checkpoint']);
+        $ticket = $ticket->fresh(['guest', 'event']);
 
-        return [
+        $response = [
             'result' => $attendance->result,
             'message' => $metadata['message'] ?? $this->messageForResult($attendance->result, $metadata['reason'] ?? null),
             'reason' => $metadata['reason'] ?? null,
             'qr_code' => $qr->code,
-            'ticket' => $this->formatTicket($ticket->fresh(['guest', 'event'])),
-            'attendance' => $this->formatAttendance($attendance->fresh(['checkpoint'])),
+            'ticket' => $this->formatTicket($ticket),
+            'attendance' => $this->formatAttendance($attendance),
             'last_validated_at' => $metadata['last_validated_at'] ?? null,
         ];
+
+        $latencyMs = $this->calculateLatencyMs($startedAt);
+        $resolvedDevice = $attendance->device_id ?? $deviceId;
+        $resolvedCheckpoint = $attendance->checkpoint ?? $checkpoint;
+
+        $this->logScanStructured(
+            $request,
+            $authUser,
+            $event,
+            $ticket,
+            $resolvedCheckpoint,
+            $attendance->result,
+            $latencyMs,
+            $resolvedDevice,
+            [
+                'qr_code' => $qr->code,
+                'message' => $response['message'],
+                'offline' => $attendance->offline ?? $offline,
+                'idempotent_reuse' => true,
+            ]
+        );
+
+        return $response;
+    }
+
+    private function isDatabaseTimeoutException(HttpExceptionInterface $exception): bool
+    {
+        return $exception->getStatusCode() === 503 && $exception->getMessage() === self::TRY_AGAIN_MESSAGE;
     }
 
     /**
@@ -598,6 +809,131 @@ class ScanController extends Controller
     private function duplicateGraceSeconds(): int
     {
         return (int) config('scan.duplicate_grace_seconds', 10);
+    }
+
+    private function databaseTimeoutMilliseconds(): int
+    {
+        return (int) config('scan.database_timeout_ms', 0);
+    }
+
+    private function ensureDatabaseWithinTimeout(float $startedAt): void
+    {
+        $timeoutMs = $this->databaseTimeoutMilliseconds();
+
+        if ($timeoutMs <= 0) {
+            return;
+        }
+
+        if ($this->calculateLatencyMs($startedAt) > $timeoutMs) {
+            throw new HttpException(503, self::TRY_AGAIN_MESSAGE);
+        }
+    }
+
+    private function calculateLatencyMs(float $startedAt): int
+    {
+        return (int) max(0, round((microtime(true) - $startedAt) * 1000));
+    }
+
+    /**
+     * Emit the structured log entry required for every scan attempt.
+     *
+     * @param array<string, mixed> $context
+     */
+    private function logScanStructured(
+        Request $request,
+        User $authUser,
+        ?Event $event,
+        ?Ticket $ticket,
+        ?Checkpoint $checkpoint,
+        string $result,
+        int $latencyMs,
+        ?string $deviceId,
+        array $context = []
+    ): void {
+        $baseContext = array_filter(array_merge([
+            'tenant_id' => $event?->tenant_id,
+            'event_id' => $event?->id,
+            'checkpoint_id' => $checkpoint?->id,
+            'ticket_id' => $ticket?->id,
+            'guest_id' => $ticket?->guest_id,
+            'result' => $result,
+            'latency_ms' => $latencyMs,
+            'device_id' => $deviceId,
+            'hostess_user_id' => $authUser->id,
+        ], $context), static fn ($value) => $value !== null);
+
+        $this->logStructuredEvent($request, 'scan.processed', $baseContext);
+    }
+
+    /**
+     * Log an error outcome for scans that did not complete successfully.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function logScanFailure(
+        Request $request,
+        User $authUser,
+        array $payload,
+        ?Event $event,
+        ?Ticket $ticket,
+        ?Checkpoint $checkpoint,
+        float $startedAt,
+        string $reason,
+        ?int $status = null
+    ): void {
+        $context = [
+            'reason' => $reason,
+            'status' => $status,
+            'qr_code' => isset($payload['qr_code']) ? (string) $payload['qr_code'] : null,
+            'offline' => isset($payload['offline']) ? (bool) $payload['offline'] : null,
+            'event_hint' => isset($payload['event_id']) ? (string) $payload['event_id'] : null,
+        ];
+
+        if ($status === null) {
+            unset($context['status']);
+        }
+
+        $latencyMs = $this->calculateLatencyMs($startedAt);
+
+        $this->logScanStructured(
+            $request,
+            $authUser,
+            $event,
+            $ticket,
+            $checkpoint,
+            'error',
+            $latencyMs,
+            isset($payload['device_id']) ? (string) $payload['device_id'] : null,
+            $context
+        );
+    }
+
+    /**
+     * Record the scan_error metric for failed scans.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function recordScanErrorMetric(
+        Request $request,
+        User $authUser,
+        array $payload,
+        ?Event $event = null
+    ): void {
+        $tenantContext = $event?->tenant_id ?? $this->resolveTenantContext($request, $authUser) ?? 'unknown';
+        $entityId = isset($payload['qr_code']) ? (string) $payload['qr_code'] : 'unknown';
+
+        $this->logLifecycleMetric(
+            $request,
+            $authUser,
+            'scan_error',
+            'scan',
+            $entityId,
+            (string) $tenantContext,
+            array_filter([
+                'result' => 'error',
+                'event_id' => $event?->id ?? ($payload['event_id'] ?? null),
+            ], static fn ($value) => $value !== null)
+        );
     }
 
     /**
