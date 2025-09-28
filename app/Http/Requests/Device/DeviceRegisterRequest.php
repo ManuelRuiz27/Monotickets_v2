@@ -18,7 +18,7 @@ class DeviceRegisterRequest extends ApiFormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'platform' => ['required', 'string', Rule::in(['web', 'android', 'ios'])],
-            'fingerprint' => ['required', 'string', 'max:255'],
+            'fingerprint' => ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9+\/=]+$/'],
         ];
     }
 }
