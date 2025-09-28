@@ -4,6 +4,7 @@ namespace App\Services\Analytics;
 
 use App\Models\ActivityMetric;
 use App\Models\Attendance;
+use App\Models\Event;
 use App\Models\Guest;
 use App\Models\GuestList;
 use Carbon\CarbonImmutable;
@@ -53,6 +54,71 @@ class AnalyticsService
                 ];
             })
             ->all();
+    }
+
+    /**
+     * Compute the main overview metrics for the provided event.
+     *
+     * @param  DateTimeInterface|string|null  $from
+     * @param  DateTimeInterface|string|null  $to
+     * @return array<string, float|int|null>
+     */
+    public function overview(string $eventId, DateTimeInterface|string|null $from = null, DateTimeInterface|string|null $to = null): array
+    {
+        $fromBoundary = $this->normaliseDateBoundary($from);
+        $toBoundary = $this->normaliseDateBoundary($to);
+
+        $invited = Guest::query()
+            ->where('event_id', $eventId)
+            ->count();
+
+        $confirmed = Guest::query()
+            ->where('event_id', $eventId)
+            ->where('rsvp_status', 'confirmed')
+            ->count();
+
+        $attendanceQuery = Attendance::query()
+            ->where('event_id', $eventId);
+
+        if ($fromBoundary !== null) {
+            $attendanceQuery->where('scanned_at', '>=', $fromBoundary);
+        }
+
+        if ($toBoundary !== null) {
+            $attendanceQuery->where('scanned_at', '<=', $toBoundary);
+        }
+
+        $validQuery = (clone $attendanceQuery)->where('result', 'valid');
+
+        $validAttendances = (clone $validQuery)->count();
+
+        $duplicateAttendances = (clone $attendanceQuery)
+            ->where('result', 'duplicate')
+            ->count();
+
+        $uniqueAttendees = (int) ((clone $validQuery)
+            ->select(DB::raw('count(distinct coalesce(guest_id, ticket_id)) as aggregate'))
+            ->value('aggregate') ?? 0);
+
+        $capacity = Event::query()
+            ->whereKey($eventId)
+            ->value('capacity');
+
+        $occupancyRate = null;
+
+        if ($capacity !== null && (int) $capacity > 0) {
+            $capacity = (int) $capacity;
+            $occupancyRate = min(100, ($capacity > 0 ? ($uniqueAttendees / $capacity) * 100 : 0));
+        }
+
+        return [
+            'invited' => (int) $invited,
+            'confirmed' => (int) $confirmed,
+            'attendances' => (int) $validAttendances,
+            'duplicates' => (int) $duplicateAttendances,
+            'unique_attendees' => (int) $uniqueAttendees,
+            'occupancy_rate' => $occupancyRate,
+        ];
     }
 
     /**
