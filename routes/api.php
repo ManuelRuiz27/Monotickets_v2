@@ -9,6 +9,7 @@ use App\Http\Controllers\CheckpointController;
 use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\EventAttendanceController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\EventStreamController;
 use App\Http\Controllers\GuestController;
 use App\Http\Controllers\GuestListController;
 use App\Http\Controllers\HostessAssignmentController;
@@ -98,6 +99,8 @@ Route::middleware('api')->group(function (): void {
     Route::middleware(['auth:api', 'role:superadmin,organizer,hostess'])
         ->prefix('events')
         ->group(function (): void {
+            Route::get('{event_id}/stream', [EventStreamController::class, 'stream'])
+                ->name('events.stream');
             Route::get('{event_id}/attendances/since', [EventAttendanceController::class, 'attendancesSince'])
                 ->name('events.attendances.since');
             Route::get('{event_id}/tickets/{ticket_id}/state', [EventAttendanceController::class, 'ticketState'])
