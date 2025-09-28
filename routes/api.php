@@ -14,6 +14,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\ScanController;
 use App\Http\Controllers\VenueController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ImportController;
 use App\Http\Middleware\EnsureTenantHeader;
 
 /*
@@ -70,6 +71,8 @@ Route::middleware('api')->group(function (): void {
             Route::get('{event_id}/guests', [GuestController::class, 'index'])->name('events.guests.index');
             Route::post('{event_id}/guests', [GuestController::class, 'store'])->name('events.guests.store');
 
+            Route::post('{event_id}/imports', [ImportController::class, 'store'])->name('events.imports.store');
+
             Route::get('{eventId}/venues', [VenueController::class, 'index'])->name('events.venues.index');
             Route::post('{eventId}/venues', [VenueController::class, 'store'])->name('events.venues.store');
             Route::get('{eventId}/venues/{venueId}', [VenueController::class, 'show'])->name('events.venues.show');
@@ -86,6 +89,13 @@ Route::middleware('api')->group(function (): void {
                 ->name('events.venues.checkpoints.update');
             Route::delete('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'destroy'])
                 ->name('events.venues.checkpoints.destroy');
+        });
+
+    Route::middleware(['auth:api', 'role:superadmin,organizer'])
+        ->prefix('imports')
+        ->group(function (): void {
+            Route::get('{import_id}', [ImportController::class, 'show'])->name('imports.show');
+            Route::get('{import_id}/rows', [ImportController::class, 'rows'])->name('imports.rows');
         });
 
     Route::middleware(['auth:api', 'role:superadmin,organizer'])
