@@ -31,7 +31,7 @@ async function parseJSON<T>(response: Response): Promise<T> {
   }
 }
 
-function resolveUrl(path: string): string {
+export function resolveApiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) {
     return path;
   }
@@ -54,7 +54,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
     headers.set('X-Tenant-ID', finalTenantId);
   }
 
-  const response = await fetch(resolveUrl(path), {
+  const response = await fetch(resolveApiUrl(path), {
     ...options,
     headers,
   });

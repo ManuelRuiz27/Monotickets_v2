@@ -1,5 +1,6 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchHostessAssignments, registerHostessDevice } from '../api/hostess';
+import EventTotalsPanel from '../components/hostess/EventTotalsPanel';
 import QrScanner from '../components/scans/QrScanner';
 import ScanHistory from '../components/scans/ScanHistory';
 import { useHostessStore } from '../hostess/store';
@@ -39,6 +40,12 @@ const Hostess = () => {
   const pendingQueueCount = usePendingQueueCount();
 
   useScanSync(currentEvent?.id ?? null);
+
+  const checkpointDisplayName = currentCheckpoint
+    ? currentCheckpoint.name
+    : currentEvent
+      ? 'Todos los checkpoints'
+      : null;
 
   useEffect(() => {
     const unsubscribe = subscribeToSyncEvents((event) => {
@@ -179,12 +186,13 @@ const Hostess = () => {
 
   return (
     <div className="hostess-page">
-      <header>
-        <h1>Panel de hostess</h1>
-        <p>Selecciona el evento, venue y punto de control donde estarás trabajando.</p>
-      </header>
+      <div className="hostess-content">
+        <header>
+          <h1>Panel de hostess</h1>
+          <p>Selecciona el evento, venue y punto de control donde estarás trabajando.</p>
+        </header>
 
-      <section className="device-section">
+        <section className="device-section">
         <h2>Registro de dispositivo</h2>
         {deviceLoading && <p>Registrando dispositivo...</p>}
         {device && !deviceLoading && (
@@ -198,9 +206,9 @@ const Hostess = () => {
         <button type="button" onClick={() => handleDeviceRegistration()} disabled={deviceLoading}>
           {device ? 'Actualizar registro' : 'Registrar dispositivo'}
         </button>
-      </section>
+        </section>
 
-      <section className="assignments-section">
+        <section className="assignments-section">
         <h2>Asignaciones activas</h2>
         {assignmentsLoading && <p>Cargando asignaciones...</p>}
         {assignmentsError && <p className="error">{assignmentsError}</p>}
@@ -268,9 +276,9 @@ const Hostess = () => {
             </ul>
           </div>
         )}
-      </section>
+        </section>
 
-      <section className="scanner-section">
+        <section className="scanner-section">
         <h2>Escaneo de tickets</h2>
         {duplicateBanner && (
           <div className="sync-banner sync-banner--warning">
@@ -295,7 +303,15 @@ const Hostess = () => {
         {device && !currentEvent && (
           <ScanHistory history={attendanceHistory} pendingCount={pendingQueueCount} />
         )}
-      </section>
+        </section>
+      </div>
+
+      <EventTotalsPanel
+        eventId={currentEvent?.id ?? null}
+        eventName={currentEvent?.name ?? null}
+        checkpointId={currentCheckpoint?.id ?? null}
+        checkpointName={checkpointDisplayName}
+      />
     </div>
   );
 };
