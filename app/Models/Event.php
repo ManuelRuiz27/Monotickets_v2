@@ -69,6 +69,26 @@ class Event extends Model
                 }
             }
         });
+
+        static::deleting(function (Event $event): void {
+            $relations = [
+                'guestLists',
+                'guests',
+                'tickets',
+                'attendances',
+                'imports',
+            ];
+
+            foreach ($relations as $relation) {
+                if ($event->isForceDeleting()) {
+                    $event->{$relation}()->withTrashed()->get()->each->forceDelete();
+
+                    continue;
+                }
+
+                $event->{$relation}()->get()->each->delete();
+            }
+        });
     }
 
     /**
@@ -109,5 +129,45 @@ class Event extends Model
     public function checkpoints(): HasMany
     {
         return $this->hasMany(Checkpoint::class);
+    }
+
+    /**
+     * Guest lists configured for the event.
+     */
+    public function guestLists(): HasMany
+    {
+        return $this->hasMany(GuestList::class);
+    }
+
+    /**
+     * Guests that belong to the event.
+     */
+    public function guests(): HasMany
+    {
+        return $this->hasMany(Guest::class);
+    }
+
+    /**
+     * Tickets emitted for the event.
+     */
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
+    /**
+     * Attendance records captured for the event.
+     */
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class);
+    }
+
+    /**
+     * Imports executed for the event.
+     */
+    public function imports(): HasMany
+    {
+        return $this->hasMany(Import::class);
     }
 }
