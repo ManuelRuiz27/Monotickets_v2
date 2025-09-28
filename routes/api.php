@@ -7,6 +7,8 @@ use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\CheckpointController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\GuestController;
+use App\Http\Controllers\GuestListController;
 use App\Http\Controllers\VenueController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\EnsureTenantHeader;
@@ -59,6 +61,12 @@ Route::middleware('api')->group(function (): void {
             Route::patch('{eventId}', [EventController::class, 'update'])->name('events.update');
             Route::delete('{eventId}', [EventController::class, 'destroy'])->name('events.destroy');
 
+            Route::get('{event_id}/guest-lists', [GuestListController::class, 'index'])->name('events.guest-lists.index');
+            Route::post('{event_id}/guest-lists', [GuestListController::class, 'store'])->name('events.guest-lists.store');
+
+            Route::get('{event_id}/guests', [GuestController::class, 'index'])->name('events.guests.index');
+            Route::post('{event_id}/guests', [GuestController::class, 'store'])->name('events.guests.store');
+
             Route::get('{eventId}/venues', [VenueController::class, 'index'])->name('events.venues.index');
             Route::post('{eventId}/venues', [VenueController::class, 'store'])->name('events.venues.store');
             Route::get('{eventId}/venues/{venueId}', [VenueController::class, 'show'])->name('events.venues.show');
@@ -75,5 +83,21 @@ Route::middleware('api')->group(function (): void {
                 ->name('events.venues.checkpoints.update');
             Route::delete('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'destroy'])
                 ->name('events.venues.checkpoints.destroy');
+        });
+
+    Route::middleware(['auth:api', 'role:superadmin,organizer'])
+        ->prefix('guest-lists')
+        ->group(function (): void {
+            Route::get('{id}', [GuestListController::class, 'show'])->name('guest-lists.show');
+            Route::patch('{id}', [GuestListController::class, 'update'])->name('guest-lists.update');
+            Route::delete('{id}', [GuestListController::class, 'destroy'])->name('guest-lists.destroy');
+        });
+
+    Route::middleware(['auth:api', 'role:superadmin,organizer'])
+        ->prefix('guests')
+        ->group(function (): void {
+            Route::get('{guest_id}', [GuestController::class, 'show'])->name('guests.show');
+            Route::patch('{guest_id}', [GuestController::class, 'update'])->name('guests.update');
+            Route::delete('{guest_id}', [GuestController::class, 'destroy'])->name('guests.destroy');
         });
 });
