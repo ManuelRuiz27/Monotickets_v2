@@ -6,6 +6,11 @@ import { type ScanRequest, type ScanResponsePayload } from '../../api/scan';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
 import { processScan } from '../../services/scanSync';
 import { maskSensitiveText } from '../../utils/privacy';
+import {
+  recordCameraFps,
+  recordDecodeAttempt,
+  recordScanLatency,
+} from '../../services/metrics';
 
 const RESULT_VARIANT: Record<string, 'valid' | 'warning' | 'invalid' | 'info'> = {
   valid: 'valid',
@@ -51,6 +56,8 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
   const audioContextRef = useRef<AudioContextLike | null>(null);
   const manualInputRef = useRef<HTMLInputElement | null>(null);
   const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
+  const fpsMonitorRef = useRef<{ stop: () => void } | null>(null);
+  const mutationStartRef = useRef<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [ignoredMessage, setIgnoredMessage] = useState<string | null>(null);
@@ -60,6 +67,9 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
 
   const scanMutation = useMutation({
     mutationFn: (payload: ScanRequest) => processScan(payload),
+    onMutate: () => {
+      mutationStartRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    },
     onSuccess: (response) => {
       setLastResult(response);
       setLastError(null);
@@ -72,6 +82,13 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       setLastError(message);
       setIgnoredMessage(null);
       playSoundForResult('invalid');
+    },
+    onSettled: () => {
+      if (mutationStartRef.current !== null) {
+        const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        recordScanLatency(end - mutationStartRef.current);
+        mutationStartRef.current = null;
+      }
     },
   });
 
@@ -216,7 +233,96 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       videoElement.srcObject = null;
       videoElement.pause();
     }
+    fpsMonitorRef.current?.stop();
+    fpsMonitorRef.current = null;
   }, []);
+
+  const setupFpsMonitoring = useCallback(
+    (mediaStream: MediaStream) => {
+      const videoElement = videoRef.current as (HTMLVideoElement & {
+        requestVideoFrameCallback?: (
+          callback: (now: number, metadata?: { presentedFrames?: number }) => void
+        ) => number;
+        cancelVideoFrameCallback?: (handle: number) => void;
+      }) | null;
+
+      fpsMonitorRef.current?.stop();
+      fpsMonitorRef.current = null;
+
+      if (!videoElement) {
+        return;
+      }
+
+      if (videoElement.requestVideoFrameCallback) {
+        let lastTimestamp: number | null = null;
+        let lastPresentedFrames: number | null = null;
+        let handle = 0;
+        let accumulatedTime = 0;
+        let accumulatedFrames = 0;
+
+        const MIN_SAMPLE_INTERVAL_MS = 500;
+
+        const callback = (timestamp: number, metadata?: { presentedFrames?: number }) => {
+          if (lastTimestamp !== null && lastPresentedFrames !== null && metadata?.presentedFrames !== undefined) {
+            const frameDelta = metadata.presentedFrames - lastPresentedFrames;
+            const timeDelta = timestamp - lastTimestamp;
+            if (frameDelta > 0 && timeDelta > 0) {
+              accumulatedTime += timeDelta;
+              accumulatedFrames += frameDelta;
+              if (accumulatedTime >= MIN_SAMPLE_INTERVAL_MS) {
+                const fps = (accumulatedFrames / accumulatedTime) * 1000;
+                recordCameraFps(fps);
+                accumulatedTime = 0;
+                accumulatedFrames = 0;
+              }
+            }
+          }
+
+          lastTimestamp = timestamp;
+          if (metadata?.presentedFrames !== undefined) {
+            lastPresentedFrames = metadata.presentedFrames;
+          }
+
+          handle = videoElement.requestVideoFrameCallback!(callback);
+        };
+
+        handle = videoElement.requestVideoFrameCallback(callback);
+        fpsMonitorRef.current = {
+          stop: () => {
+            videoElement.cancelVideoFrameCallback?.(handle);
+          },
+        };
+        return;
+      }
+
+      const [track] = mediaStream.getVideoTracks();
+      const settings = track?.getSettings?.();
+      const settingRate = typeof settings?.frameRate === 'number' ? settings.frameRate : undefined;
+      if (settingRate) {
+        recordCameraFps(settingRate);
+      } else {
+        const constraints = track?.getConstraints?.();
+        const constraintRate =
+          typeof constraints?.frameRate === 'number'
+            ? constraints.frameRate
+            : typeof constraints?.frameRate === 'object' &&
+              constraints.frameRate !== null &&
+              typeof constraints.frameRate.ideal === 'number'
+            ? constraints.frameRate.ideal
+            : undefined;
+        if (constraintRate) {
+          recordCameraFps(constraintRate);
+        }
+      }
+
+      fpsMonitorRef.current = {
+        stop: () => {
+          /* noop */
+        },
+      };
+    },
+    []
+  );
 
   const startCamera = useCallback(async () => {
     if (typeof navigator === 'undefined') {
@@ -269,11 +375,15 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
           }
 
           if (result) {
+            recordDecodeAttempt(true);
             handleScanRef.current(result.getText());
           }
 
-          if (error && !(error instanceof NotFoundException)) {
-            console.error('Error de escaneo', error);
+          if (!result && error) {
+            recordDecodeAttempt(false);
+            if (!(error instanceof NotFoundException)) {
+              console.error('Error de escaneo', error);
+            }
           }
         }
       );
@@ -281,6 +391,9 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       controlsRef.current = controls;
       setCameraError(null);
       setIsCameraPaused(false);
+      if (mediaStream) {
+        setupFpsMonitoring(mediaStream);
+      }
       try {
         await videoElement.play();
       } catch (error) {
@@ -295,7 +408,7 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       }
       setCameraError('No se pudo acceder a la cámara. Verifica los permisos del navegador.');
     }
-  }, []);
+  }, [setupFpsMonitoring]);
 
   useEffect(() => {
     void startCamera();

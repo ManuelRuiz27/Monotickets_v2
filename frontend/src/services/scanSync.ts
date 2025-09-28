@@ -23,6 +23,7 @@ import {
   setLastSyncCursor,
   type AttendanceCacheRecord,
 } from './offlineQueue';
+import { recordBatchSize, recordRetry } from './metrics';
 
 const OFFLINE_MESSAGE = 'Sin conexión. El escaneo se guardó y se sincronizará automáticamente.';
 const FALLBACK_MESSAGE =
@@ -164,6 +165,7 @@ export async function attemptSync(options: SyncAttemptOptions = {}): Promise<Syn
       }
 
       processedAny = true;
+      recordBatchSize(batch.length);
       await markScansAsSent(batch);
 
       const requestPayload = batch.map((record) => ({
@@ -183,6 +185,7 @@ export async function attemptSync(options: SyncAttemptOptions = {}): Promise<Syn
           error instanceof ApiError && error.message
             ? error.message
             : 'No se pudo sincronizar los escaneos pendientes.';
+        recordRetry(batch.length);
         await revertScansToPending(batch, message);
         throw error;
       }
