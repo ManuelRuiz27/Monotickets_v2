@@ -155,7 +155,9 @@ Route::middleware('api')->group(function (): void {
     Route::middleware(['auth:api', 'role:superadmin,organizer,hostess'])->group(function (): void {
         Route::post('devices/register', [DeviceController::class, 'register'])->name('devices.register');
         Route::get('me/assignments', [HostessAssignmentMeController::class, 'index'])->name('me.assignments.index');
-        Route::post('scan', [ScanController::class, 'store'])->name('scan.store');
+        Route::post('scan', [ScanController::class, 'store'])
+            ->middleware('throttle:scan-device')
+            ->name('scan.store');
         Route::post('scan/batch', [ScanController::class, 'batch'])->name('scan.batch');
     });
 });

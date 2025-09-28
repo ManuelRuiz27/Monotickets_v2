@@ -72,6 +72,22 @@ trait StructuredLogging
         Log::info('metrics.counter', array_merge($baseContext, $context));
     }
 
+    /**
+     * Emit a structured log entry for ad-hoc events.
+     *
+     * @param array<string, mixed> $context
+     */
+    protected function logStructuredEvent(Request $request, string $event, array $context = []): void
+    {
+        $requestId = $this->extractRequestId($request);
+
+        if ($requestId !== null) {
+            $context = array_merge(['request_id' => $requestId], $context);
+        }
+
+        Log::info($event, $context);
+    }
+
     private function extractRequestId(Request $request): ?string
     {
         $requestId = Arr::first(array_filter([
