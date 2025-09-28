@@ -11,6 +11,7 @@ use App\Models\Qr;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\Venue;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -120,10 +121,7 @@ class EventStreamTest extends TestCase
         $this->assertNotEmpty($body);
         $this->assertStringContainsString('event: totals', $body);
 
-        preg_match('/data: (.+)/', $body, $matches);
-        $this->assertArrayHasKey(1, $matches);
-
-        $payload = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
+        $payload = $this->extractSsePayload($body);
 
         $this->assertSame([
             'valid' => 1,
@@ -177,16 +175,7 @@ class EventStreamTest extends TestCase
 
         $response->assertForbidden();
 
-        HostessAssignment::query()->create([
-            'tenant_id' => $tenant->id,
-            'hostess_user_id' => $hostess->id,
-            'event_id' => $event->id,
-            'venue_id' => null,
-            'checkpoint_id' => null,
-            'starts_at' => CarbonImmutable::now()->subHour(),
-            'ends_at' => CarbonImmutable::now()->addHour(),
-            'is_active' => true,
-        ]);
+        $this->createHostessAssignment($hostess, $event);
 
         $authorizedResponse = $this->actingAs($hostess, 'api')->get(
             sprintf('/events/%s/stream', $event->id),
@@ -195,6 +184,81 @@ class EventStreamTest extends TestCase
 
         $authorizedResponse->assertOk();
         $authorizedResponse->assertHeader('Content-Type', 'text/event-stream');
+    }
+
+    public function test_stream_updates_after_attendance_creation(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'status' => 'published',
+            'checkin_policy' => 'single',
+        ]);
+
+        $this->createHostessAssignment($hostess, $event);
+
+        $initialResponse = $this->actingAs($hostess, 'api')->get(
+            sprintf('/events/%s/stream', $event->id),
+            ['Accept' => 'text/event-stream']
+        );
+
+        $initialResponse->assertOk();
+        $initialPayload = $this->extractSsePayload($initialResponse->streamedContent());
+
+        $this->assertSame([
+            'valid' => 0,
+            'duplicate' => 0,
+            'invalid' => 0,
+        ], $initialPayload['totals']);
+
+        [$ticket, $qr] = $this->createTicketWithQr($event);
+
+        $scanResponse = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => $qr->code,
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T18:00:00Z')->toIso8601String(),
+            'device_id' => 'sse-device',
+        ]);
+
+        $scanResponse->assertOk();
+        $scanResponse->assertJsonPath('data.result', 'valid');
+
+        $updatedResponse = $this->actingAs($hostess, 'api')->get(
+            sprintf('/events/%s/stream', $event->id),
+            ['Accept' => 'text/event-stream']
+        );
+
+        $updatedResponse->assertOk();
+        $updatedPayload = $this->extractSsePayload($updatedResponse->streamedContent());
+
+        $this->assertSame(1, $updatedPayload['totals']['valid']);
+        $this->assertSame(0, $updatedPayload['totals']['duplicate']);
+        $this->assertSame(0, $updatedPayload['totals']['invalid']);
+    }
+
+    private function createHostessAssignment(User $hostess, Event $event, ?Venue $venue = null, ?Checkpoint $checkpoint = null): void
+    {
+        HostessAssignment::query()->create([
+            'tenant_id' => $event->tenant_id,
+            'hostess_user_id' => $hostess->id,
+            'event_id' => $event->id,
+            'venue_id' => $venue?->id,
+            'checkpoint_id' => $checkpoint?->id,
+            'starts_at' => CarbonImmutable::now()->subHour(),
+            'ends_at' => CarbonImmutable::now()->addHour(),
+            'is_active' => true,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function extractSsePayload(string $body): array
+    {
+        preg_match('/data: (.+)/', $body, $matches);
+        $this->assertArrayHasKey(1, $matches);
+
+        return json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
     }
 
     /**
