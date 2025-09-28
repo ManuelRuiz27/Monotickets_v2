@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Events\ImportProcessingCompleted;
+use App\Events\ImportProcessingStarted;
 use App\Events\QrRotated;
 use App\Events\TicketIssued;
 use App\Events\TicketRevoked;
+use App\Listeners\RecordImportCompletedAudit;
+use App\Listeners\RecordImportStartedAudit;
 use App\Listeners\RecordQrRotatedAudit;
 use App\Listeners\RecordTicketIssuedAudit;
 use App\Listeners\RecordTicketRevokedAudit;
@@ -27,6 +31,12 @@ class EventServiceProvider extends ServiceProvider
         ],
         QrRotated::class => [
             RecordQrRotatedAudit::class,
+        ],
+        ImportProcessingStarted::class => [
+            RecordImportStartedAudit::class,
+        ],
+        ImportProcessingCompleted::class => [
+            RecordImportCompletedAudit::class,
         ],
     ];
 
