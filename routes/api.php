@@ -11,6 +11,7 @@ use App\Http\Controllers\GuestController;
 use App\Http\Controllers\GuestListController;
 use App\Http\Controllers\QrController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\ScanController;
 use App\Http\Controllers\VenueController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\EnsureTenantHeader;
@@ -114,4 +115,9 @@ Route::middleware('api')->group(function (): void {
             Route::get('{ticket_id}/qr', [QrController::class, 'show'])->name('tickets.qr.show');
             Route::post('{ticket_id}/qr', [QrController::class, 'store'])->name('tickets.qr.store');
         });
+
+    Route::middleware(['auth:api', 'role:superadmin,organizer,hostess'])->group(function (): void {
+        Route::post('scan', [ScanController::class, 'store'])->name('scan.store');
+        Route::post('scan/batch', [ScanController::class, 'batch'])->name('scan.batch');
+    });
 });
