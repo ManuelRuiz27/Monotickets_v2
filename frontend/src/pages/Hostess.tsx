@@ -1,6 +1,7 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchHostessAssignments, registerHostessDevice } from '../api/hostess';
 import QrScanner from '../components/scans/QrScanner';
+import ScanHistory from '../components/scans/ScanHistory';
 import { useHostessStore } from '../hostess/store';
 import type { HostessCheckpoint, HostessEvent, HostessVenue } from '../hostess/types';
 import { extractApiErrorMessage } from '../utils/apiErrors';
@@ -9,12 +10,19 @@ import {
   resolveDeviceName,
   resolveDevicePlatform,
 } from '../utils/fingerprint';
+import {
+  subscribeToSyncEvents,
+  useAttendanceHistory,
+  usePendingQueueCount,
+  useScanSync,
+} from '../services/scanSync';
 
 const Hostess = () => {
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
   const [deviceLoading, setDeviceLoading] = useState(false);
   const [deviceError, setDeviceError] = useState<string | null>(null);
+  const [duplicateBanner, setDuplicateBanner] = useState<string | null>(null);
 
   const assignments = useHostessStore((state) => state.assignments);
   const currentEvent = useHostessStore((state) => state.currentEvent);
@@ -26,6 +34,26 @@ const Hostess = () => {
   const selectVenue = useHostessStore((state) => state.selectVenue);
   const selectCheckpoint = useHostessStore((state) => state.selectCheckpoint);
   const setDevice = useHostessStore((state) => state.setDevice);
+
+  const attendanceHistory = useAttendanceHistory(currentEvent?.id ?? null, 25);
+  const pendingQueueCount = usePendingQueueCount();
+
+  useScanSync(currentEvent?.id ?? null);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToSyncEvents((event) => {
+      if (event.type === 'duplicate') {
+        const message = event.record.message
+          ? `${event.record.message} (${event.record.qr_code})`
+          : `Se detectó un duplicado para ${event.record.qr_code}.`;
+        setDuplicateBanner(message);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const dismissDuplicateBanner = () => setDuplicateBanner(null);
 
   const events = useMemo((): HostessEvent[] => {
     const map = new Map<string, HostessEvent>();
@@ -244,14 +272,28 @@ const Hostess = () => {
 
       <section className="scanner-section">
         <h2>Escaneo de tickets</h2>
+        {duplicateBanner && (
+          <div className="sync-banner sync-banner--warning">
+            <span>{duplicateBanner}</span>
+            <button type="button" onClick={dismissDuplicateBanner}>
+              Cerrar
+            </button>
+          </div>
+        )}
         {!device && <p>Registra este dispositivo para habilitar el escaneo.</p>}
         {!currentEvent && <p>Selecciona un evento para comenzar a escanear.</p>}
         {device && currentEvent && (
-          <QrScanner
-            eventId={currentEvent.id}
-            checkpointId={currentCheckpoint?.id ?? null}
-            deviceId={device.id}
-          />
+          <>
+            <QrScanner
+              eventId={currentEvent.id}
+              checkpointId={currentCheckpoint?.id ?? null}
+              deviceId={device.id}
+            />
+            <ScanHistory history={attendanceHistory} pendingCount={pendingQueueCount} />
+          </>
+        )}
+        {device && !currentEvent && (
+          <ScanHistory history={attendanceHistory} pendingCount={pendingQueueCount} />
         )}
       </section>
     </div>

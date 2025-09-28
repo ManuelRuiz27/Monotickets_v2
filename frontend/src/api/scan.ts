@@ -70,3 +70,74 @@ export async function scanTicket(payload: ScanRequest): Promise<ScanResponse> {
     body: JSON.stringify(body),
   });
 }
+
+export interface ScanBatchRequest {
+  scans: ScanRequest[];
+}
+
+export interface ScanBatchResultItem extends ScanResponsePayload {
+  index: number;
+  status?: number;
+}
+
+export interface ScanBatchResponse {
+  data: ScanBatchResultItem[];
+  meta?: {
+    summary?: {
+      valid: number;
+      duplicate: number;
+      errors: number;
+    };
+    total_scans?: number;
+    next_cursor?: string | null;
+  };
+}
+
+export interface EventAttendance {
+  id: string;
+  event_id: string;
+  ticket_id: string;
+  guest_id: string | null;
+  result: string;
+  checkpoint_id: string | null;
+  hostess_user_id: string | null;
+  scanned_at: string | null;
+  device_id: string | null;
+  offline: boolean;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface AttendancesSinceResponse {
+  data: EventAttendance[];
+  meta?: {
+    next_cursor?: string | null;
+  };
+}
+
+export async function syncScanBatch(payload: ScanBatchRequest): Promise<ScanBatchResponse> {
+  return apiFetch<ScanBatchResponse>('/scan/batch', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+interface AttendancesSinceParams {
+  cursor?: string;
+  limit?: number;
+}
+
+export async function fetchAttendancesSince(
+  eventId: string,
+  params: AttendancesSinceParams = {}
+): Promise<AttendancesSinceResponse> {
+  const query = new URLSearchParams();
+  if (params.cursor) {
+    query.set('cursor', params.cursor);
+  }
+  if (params.limit) {
+    query.set('limit', params.limit.toString());
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return apiFetch<AttendancesSinceResponse>(`/events/${eventId}/attendances/since${suffix}`);
+}
