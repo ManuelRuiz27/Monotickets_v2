@@ -9,6 +9,7 @@ use App\Http\Controllers\CheckpointController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\GuestController;
 use App\Http\Controllers\GuestListController;
+use App\Http\Controllers\QrController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\VenueController;
 use App\Http\Controllers\UserController;
@@ -110,5 +111,7 @@ Route::middleware('api')->group(function (): void {
             Route::get('{ticket_id}', [TicketController::class, 'show'])->name('tickets.show');
             Route::patch('{ticket_id}', [TicketController::class, 'update'])->name('tickets.update');
             Route::delete('{ticket_id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
+            Route::get('{ticket_id}/qr', [QrController::class, 'show'])->name('tickets.qr.show');
+            Route::post('{ticket_id}/qr', [QrController::class, 'store'])->name('tickets.qr.store');
         });
 });
