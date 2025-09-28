@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Events\ImportProcessingCompleted;
 use App\Models\AuditLog;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Persist audit logs when imports finish processing.
@@ -30,6 +31,18 @@ class RecordImportCompletedAudit
             'ip' => null,
             'ua' => null,
             'occurred_at' => CarbonImmutable::now(),
+        ]);
+
+        Log::info('import.completed', [
+            'entity_type' => 'import',
+            'action' => 'completed',
+            'tenant_id' => (string) $import->tenant_id,
+            'event_id' => (string) $import->event_id,
+            'user_id' => null,
+            'entity_id' => (string) $import->id,
+            'rows_total' => $import->rows_total,
+            'rows_ok' => $import->rows_ok,
+            'rows_failed' => $import->rows_failed,
         ]);
     }
 }
