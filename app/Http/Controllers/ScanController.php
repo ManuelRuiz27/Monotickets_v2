@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\InteractsWithTenants;
 use App\Models\Attendance;
 use App\Models\Checkpoint;
 use App\Models\Event;
+use App\Models\HostessAssignment;
 use App\Models\Qr;
 use App\Models\Ticket;
 use App\Models\User;
@@ -15,6 +16,8 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use function optional;
 
 /**
@@ -81,24 +84,75 @@ class ScanController extends Controller
             'scans.*.event_id' => ['nullable', 'uuid'],
         ]);
 
-        $responses = [];
+        $scans = [];
 
         foreach ($validated['scans'] as $index => $scan) {
-            $payload = $this->handleScan($request, $authUser, $scan, true);
+            $scans[] = [
+                'index' => $index,
+                'payload' => $scan,
+            ];
+        }
 
-            if ($payload === null) {
-                $responses[] = array_merge([
+        usort($scans, static function (array $left, array $right): int {
+            $leftTime = CarbonImmutable::parse((string) $left['payload']['scanned_at']);
+            $rightTime = CarbonImmutable::parse((string) $right['payload']['scanned_at']);
+
+            return $leftTime <=> $rightTime;
+        });
+
+        $responses = [];
+        $summary = [
+            'valid' => 0,
+            'duplicate' => 0,
+            'errors' => 0,
+        ];
+
+        foreach ($scans as $scan) {
+            $index = $scan['index'];
+            $payload = $scan['payload'];
+
+            try {
+                $result = $this->handleScan($request, $authUser, $payload, true);
+            } catch (HttpExceptionInterface $exception) {
+                $responses[] = [
                     'index' => $index,
-                ], $this->formatUnknownQrResponse((string) $scan['qr_code']));
+                    'status' => $exception->getStatusCode(),
+                    'result' => 'error',
+                    'message' => $exception->getMessage(),
+                    'reason' => 'hostess_assignment_missing',
+                ];
+                ++$summary['errors'];
 
                 continue;
             }
 
-            $responses[] = array_merge(['index' => $index], $payload);
+            if ($result === null) {
+                $response = array_merge([
+                    'index' => $index,
+                ], $this->formatUnknownQrResponse((string) $payload['qr_code']));
+
+                $responses[] = $response;
+                ++$summary['errors'];
+
+                continue;
+            }
+
+            $responses[] = array_merge(['index' => $index], $result);
+
+            if ($result['result'] === 'valid') {
+                ++$summary['valid'];
+            } elseif ($result['result'] === 'duplicate') {
+                ++$summary['duplicate'];
+            } else {
+                ++$summary['errors'];
+            }
         }
 
         return response()->json([
             'data' => $responses,
+            'meta' => [
+                'summary' => $summary,
+            ],
         ], 207);
     }
 
@@ -199,6 +253,14 @@ class ScanController extends Controller
             }
         }
 
+        if (! $this->hostessHasActiveAssignment($authUser, $event, $checkpoint, $scanTime)) {
+            abort(403, 'The hostess is not assigned to this event or checkpoint.');
+        }
+
+        if ($existingAttendance = $this->findExistingAttendance($ticket, $event, $scanTime, $deviceId)) {
+            return $this->buildResponseFromAttendance($ticket, $qr, $existingAttendance);
+        }
+
         if (! $qr->is_active) {
             return $this->finalizeScan(
                 $request,
@@ -264,14 +326,29 @@ class ScanController extends Controller
 
         $event->loadMissing('attendances');
 
-        $hasValidAttendance = Attendance::query()
+        $lastValidAttendance = Attendance::query()
             ->where('ticket_id', $ticket->id)
             ->where('result', 'valid')
-            ->exists();
+            ->latest('scanned_at')
+            ->first();
 
+        $hasValidAttendance = $lastValidAttendance !== null;
         $isDuplicate = $event->checkin_policy === 'single' && ($hasValidAttendance || $ticket->status === 'used');
 
         if ($isDuplicate) {
+            $metadata = [
+                'reason' => 'duplicate_entry',
+            ];
+
+            if ($lastValidAttendance !== null && $lastValidAttendance->scanned_at !== null) {
+                $lastValidAt = CarbonImmutable::parse($lastValidAttendance->scanned_at->toIso8601String());
+                $secondsSinceLastValid = $scanTime->diffInRealSeconds($lastValidAt);
+
+                if ($secondsSinceLastValid < $this->duplicateGraceSeconds()) {
+                    $metadata['last_validated_at'] = $lastValidAt->toIso8601String();
+                }
+            }
+
             return $this->finalizeScan(
                 $request,
                 $authUser,
@@ -284,9 +361,7 @@ class ScanController extends Controller
                 $offline,
                 $deviceId,
                 $checkpoint,
-                [
-                    'reason' => 'duplicate_entry',
-                ]
+                $metadata
             );
         }
 
@@ -342,6 +417,8 @@ class ScanController extends Controller
             $checkpoint,
             $metadata
         ): array {
+            $ticket = Ticket::query()->whereKey($ticket->id)->lockForUpdate()->firstOrFail();
+
             if ($result === 'valid' && $ticket->status !== 'used') {
                 $ticket->status = 'used';
                 $ticket->save();
@@ -364,7 +441,9 @@ class ScanController extends Controller
                 'scanned_at' => $scannedAt,
                 'device_id' => $deviceId,
                 'offline' => $offline,
-                'metadata_json' => array_filter($metadata, static fn ($value) => $value !== null),
+                'metadata_json' => array_filter(array_merge($metadata, [
+                    'message' => $message,
+                ]), static fn ($value) => $value !== null),
             ]);
 
             $tenantId = (string) $event->tenant_id;
@@ -417,8 +496,108 @@ class ScanController extends Controller
                 'qr_code' => $qr->code,
                 'ticket' => $this->formatTicket($ticket->fresh(['guest', 'event'])),
                 'attendance' => $this->formatAttendance($attendance->fresh(['checkpoint'])),
+                'last_validated_at' => $metadata['last_validated_at'] ?? null,
             ];
         });
+    }
+
+    /**
+     * Determine if the hostess has an active assignment for the event and checkpoint.
+     */
+    private function hostessHasActiveAssignment(User $authUser, Event $event, ?Checkpoint $checkpoint, CarbonImmutable $scanTime): bool
+    {
+        $now = Carbon::parse($scanTime->toIso8601String());
+
+        return HostessAssignment::query()
+            ->forTenant((string) $event->tenant_id)
+            ->where('hostess_user_id', $authUser->id)
+            ->where('event_id', $event->id)
+            ->when($checkpoint !== null, function ($query) use ($checkpoint): void {
+                $query->where(function ($constraint) use ($checkpoint): void {
+                    $constraint
+                        ->whereNull('checkpoint_id')
+                        ->orWhere('checkpoint_id', $checkpoint->id);
+                });
+            }, function ($query): void {
+                $query->whereNull('checkpoint_id');
+            })
+            ->currentlyActive($now)
+            ->exists();
+    }
+
+    /**
+     * Attempt to reuse an existing attendance record when the scan is idempotent.
+     */
+    private function findExistingAttendance(Ticket $ticket, Event $event, CarbonImmutable $scanTime, ?string $deviceId): ?Attendance
+    {
+        $windowSeconds = $this->idempotencyWindowSeconds();
+        $windowStart = $scanTime->subSeconds($windowSeconds);
+        $windowEnd = $scanTime->addSeconds($windowSeconds);
+
+        $query = Attendance::query()
+            ->where('event_id', $event->id)
+            ->where('ticket_id', $ticket->id)
+            ->whereBetween('scanned_at', [$windowStart, $windowEnd])
+            ->orderByDesc('scanned_at');
+
+        if ($deviceId !== null) {
+            $query->where('device_id', $deviceId);
+        } else {
+            $query->whereNull('device_id');
+        }
+
+        return $query->first();
+    }
+
+    /**
+     * Build the response payload based on an existing attendance record.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildResponseFromAttendance(Ticket $ticket, Qr $qr, Attendance $attendance): array
+    {
+        $metadata = $attendance->metadata_json ?? [];
+
+        return [
+            'result' => $attendance->result,
+            'message' => $metadata['message'] ?? $this->messageForResult($attendance->result, $metadata['reason'] ?? null),
+            'reason' => $metadata['reason'] ?? null,
+            'qr_code' => $qr->code,
+            'ticket' => $this->formatTicket($ticket->fresh(['guest', 'event'])),
+            'attendance' => $this->formatAttendance($attendance->fresh(['checkpoint'])),
+            'last_validated_at' => $metadata['last_validated_at'] ?? null,
+        ];
+    }
+
+    /**
+     * Resolve the human-readable message associated with a scan result.
+     */
+    private function messageForResult(string $result, ?string $reason = null): string
+    {
+        return match ($result) {
+            'valid' => 'The ticket is valid.',
+            'duplicate' => 'The ticket has already been used.',
+            'revoked' => 'The ticket has been revoked.',
+            'expired' => 'The ticket has expired.',
+            'invalid' => match ($reason) {
+                'tenant_mismatch' => 'The ticket does not belong to the active tenant.',
+                'event_mismatch' => 'The ticket belongs to a different event.',
+                'checkpoint_invalid' => 'The checkpoint is not valid for this event.',
+                'qr_inactive' => 'The QR code is inactive.',
+                default => 'The QR code could not be resolved.',
+            },
+            default => 'The ticket could not be processed.',
+        };
+    }
+
+    private function idempotencyWindowSeconds(): int
+    {
+        return (int) config('scan.idempotency_window_seconds', 5);
+    }
+
+    private function duplicateGraceSeconds(): int
+    {
+        return (int) config('scan.duplicate_grace_seconds', 10);
     }
 
     /**
