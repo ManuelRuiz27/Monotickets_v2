@@ -35,6 +35,11 @@ type AudioContextLike = AudioContext | (AudioContext & { close: () => Promise<vo
 
 const DEFAULT_DEBOUNCE_MS = 2000;
 
+type WakeLockSentinelLike = {
+  release: () => Promise<void>;
+  addEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+};
+
 const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOUNCE_MS }: QrScannerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
@@ -43,11 +48,14 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
   const lastValueRef = useRef<string | null>(null);
   const lastTimestampRef = useRef<number>(0);
   const audioContextRef = useRef<AudioContextLike | null>(null);
+  const manualInputRef = useRef<HTMLInputElement | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [ignoredMessage, setIgnoredMessage] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ScanResponsePayload | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [isCameraPaused, setIsCameraPaused] = useState(false);
 
   const scanMutation = useMutation({
     mutationFn: (payload: ScanRequest) => processScan(payload),
@@ -197,69 +205,91 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
     handleScanRef.current = handleScannedValue;
   }, [handleScannedValue]);
 
-  useEffect(() => {
+  const stopCamera = useCallback(() => {
+    controlsRef.current?.stop();
+    codeReaderRef.current?.reset();
+    const videoElement = videoRef.current;
+    if (videoElement) {
+      const mediaStream = videoElement.srcObject as MediaStream | null;
+      mediaStream?.getTracks().forEach((track) => track.stop());
+      videoElement.srcObject = null;
+      videoElement.pause();
+    }
+  }, []);
+
+  const startCamera = useCallback(async () => {
     if (typeof navigator === 'undefined') {
       setCameraError('La cámara no está disponible en este entorno.');
       return;
     }
 
-    const startCamera = async () => {
-      const videoElement = videoRef.current;
-      if (!videoElement) {
-        return;
-      }
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return;
+    }
 
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError('Tu navegador no soporta el acceso a la cámara.');
-        return;
-      }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError('Tu navegador no soporta el acceso a la cámara.');
+      return;
+    }
 
-      videoElement.playsInline = true;
-      videoElement.muted = true;
-      videoElement.autoplay = true;
+    videoElement.playsInline = true;
+    videoElement.muted = true;
+    videoElement.autoplay = true;
 
-      if (!codeReaderRef.current) {
-        codeReaderRef.current = new BrowserMultiFormatReader();
-      }
+    if (!codeReaderRef.current) {
+      codeReaderRef.current = new BrowserMultiFormatReader();
+    }
 
-      const codeReader = codeReaderRef.current;
-      controlsRef.current?.stop();
-      codeReader.reset();
+    const codeReader = codeReaderRef.current;
+    controlsRef.current?.stop();
+    codeReader.reset();
 
-      try {
-        const controls = await codeReader.decodeFromVideoDevice(
-          undefined,
-          videoElement,
-          (result, error, controlsParam) => {
-            if (controlsParam) {
-              controlsRef.current = controlsParam;
-            }
-
-            if (result) {
-              handleScanRef.current(result.getText());
-            }
-
-            if (error && !(error instanceof NotFoundException)) {
-              console.error('Error de escaneo', error);
-            }
+    try {
+      const controls = await codeReader.decodeFromVideoDevice(
+        undefined,
+        videoElement,
+        (result, error, controlsParam) => {
+          if (controlsParam) {
+            controlsRef.current = controlsParam;
           }
-        );
 
-        controlsRef.current = controls;
-        setCameraError(null);
+          if (result) {
+            handleScanRef.current(result.getText());
+          }
+
+          if (error && !(error instanceof NotFoundException)) {
+            console.error('Error de escaneo', error);
+          }
+        }
+      );
+
+      controlsRef.current = controls;
+      setCameraError(null);
+      setIsCameraPaused(false);
+      try {
+        await videoElement.play();
       } catch (error) {
-        console.error('No se pudo iniciar la cámara', error);
-        setCameraError('No se pudo acceder a la cámara. Verifica los permisos del navegador.');
+        console.warn('No se pudo reproducir el video de la cámara automáticamente.', error);
       }
-    };
+    } catch (error) {
+      console.error('No se pudo iniciar la cámara', error);
+      setCameraError('No se pudo acceder a la cámara. Verifica los permisos del navegador.');
+    }
+  }, []);
 
+  useEffect(() => {
     void startCamera();
 
     return () => {
-      controlsRef.current?.stop();
-      codeReaderRef.current?.reset();
+      stopCamera();
     };
-  }, []);
+  }, [startCamera, stopCamera]);
+
+  const pauseCamera = useCallback(() => {
+    stopCamera();
+    setIsCameraPaused(true);
+  }, [stopCamera]);
 
   useEffect(() => {
     if (!ignoredMessage) {
@@ -315,6 +345,95 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
     handleScannedValue(value);
   };
 
+  useEffect(() => {
+    if (typeof navigator === 'undefined') {
+      return;
+    }
+
+    const extendedNavigator = navigator as Navigator & {
+      wakeLock?: {
+        request: (type: 'screen') => Promise<WakeLockSentinelLike>;
+      };
+    };
+
+    if (!extendedNavigator.wakeLock) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const requestWakeLock = async () => {
+      try {
+        const sentinel = await extendedNavigator.wakeLock!.request('screen');
+        if (isCancelled) {
+          await sentinel.release();
+          return;
+        }
+        wakeLockRef.current = sentinel;
+        sentinel.addEventListener?.('release', () => {
+          wakeLockRef.current = null;
+        });
+      } catch (error) {
+        console.warn('No se pudo activar el modo de pantalla despierta.', error);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void requestWakeLock();
+      } else if (wakeLockRef.current) {
+        void wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+    };
+
+    void requestWakeLock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      isCancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      void wakeLockRef.current?.release();
+      wakeLockRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditableTarget =
+        !!target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
+        event.preventDefault();
+        manualInputRef.current?.focus();
+        manualInputRef.current?.select();
+        return;
+      }
+
+      if (event.code === 'Space' || event.key === ' ') {
+        if (isEditableTarget) {
+          return;
+        }
+        event.preventDefault();
+        if (isCameraPaused) {
+          void startCamera();
+        } else {
+          pauseCamera();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isCameraPaused, pauseCamera, startCamera]);
+
   return (
     <div className="qr-scanner">
       <div className="qr-scanner__video">
@@ -322,6 +441,13 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
       </div>
 
       {cameraError && <p className="qr-scanner__status qr-scanner__status--error">{cameraError}</p>}
+      {!cameraError && (
+        <p className="qr-scanner__status qr-scanner__status--hint">
+          {isCameraPaused
+            ? 'Cámara en pausa. Presiona Espacio para reanudar.'
+            : 'Presiona Espacio para pausar la cámara cuando lo necesites.'}
+        </p>
+      )}
 
       <form className="qr-scanner__manual" onSubmit={handleManualSubmit}>
         <label htmlFor="qr-scanner-manual-input">Ingreso manual</label>
@@ -334,6 +460,7 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
           value={manualCode}
           onChange={(event) => setManualCode(event.target.value)}
           disabled={scanMutation.isPending}
+          ref={manualInputRef}
         />
         <small>Compatible con lectores láser o teclado. Presiona Enter para enviar.</small>
       </form>
