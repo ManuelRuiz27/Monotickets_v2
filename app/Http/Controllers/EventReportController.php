@@ -13,6 +13,7 @@ use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use function number_format;
 use function ob_get_clean;
@@ -24,6 +25,14 @@ use function ob_start;
 class EventReportController extends Controller
 {
     use ResolvesEvents;
+
+    private const CSV_CHUNK_SIZE = 5000;
+
+    private const MAX_RANGE_DAYS = 7;
+
+    private const DEFAULT_RANGE_HOURS = 48;
+
+    private const PDF_PAGE_THRESHOLD = 6;
 
     public function __construct(private readonly AnalyticsService $analytics)
     {
@@ -47,8 +56,21 @@ class EventReportController extends Controller
             'checkpoint_id' => ['nullable', 'uuid'],
         ]);
 
-        $from = isset($validated['from']) ? CarbonImmutable::parse((string) $validated['from']) : null;
-        $to = isset($validated['to']) ? CarbonImmutable::parse((string) $validated['to']) : null;
+        $range = $this->resolveDateRange(
+            isset($validated['from']) ? CarbonImmutable::parse((string) $validated['from']) : null,
+            isset($validated['to']) ? CarbonImmutable::parse((string) $validated['to']) : null
+        );
+
+        if ($range === null) {
+            return ApiResponse::error(
+                'INVALID_RANGE',
+                sprintf('The requested period cannot exceed %d days.', self::MAX_RANGE_DAYS),
+                null,
+                422
+            );
+        }
+
+        [$from, $to] = $range;
         $checkpointId = $validated['checkpoint_id'] ?? null;
 
         $filename = sprintf('attendance-%s.csv', $event->id);
@@ -56,17 +78,17 @@ class EventReportController extends Controller
         $callback = function () use ($event, $from, $to, $checkpointId): void {
             $handle = fopen('php://output', 'wb');
 
+            if ($handle === false) {
+                return;
+            }
+
             fputcsv($handle, [
-                'Attendance ID',
-                'Ticket ID',
-                'Guest ID',
-                'Guest Name',
-                'Guest Email',
-                'Result',
-                'Checkpoint',
-                'Hostess',
-                'Scanned At',
-                'Device ID',
+                'timestamp',
+                'checkpoint',
+                'ticket',
+                'guest',
+                'hostess',
+                'result',
             ]);
 
             Attendance::query()
@@ -83,19 +105,15 @@ class EventReportController extends Controller
                 })
                 ->orderBy('scanned_at')
                 ->orderBy('id')
-                ->chunk(500, static function ($attendances) use ($handle): void {
+                ->chunk(self::CSV_CHUNK_SIZE, static function ($attendances) use ($handle): void {
                     foreach ($attendances as $attendance) {
                         fputcsv($handle, [
-                            $attendance->id,
-                            $attendance->ticket_id,
-                            $attendance->guest_id,
-                            $attendance->guest?->full_name,
-                            $attendance->guest?->email,
-                            $attendance->result,
-                            $attendance->checkpoint?->name,
-                            $attendance->hostess?->name,
                             optional($attendance->scanned_at)->toISOString(),
-                            $attendance->device_id,
+                            $attendance->checkpoint?->name,
+                            $attendance->ticket_id,
+                            $attendance->guest?->full_name,
+                            $attendance->hostess?->name,
+                            $attendance->result,
                         ]);
                     }
                 });
@@ -125,8 +143,21 @@ class EventReportController extends Controller
             'to' => ['nullable', 'date', 'after_or_equal:from'],
         ]);
 
-        $from = isset($validated['from']) ? CarbonImmutable::parse((string) $validated['from']) : null;
-        $to = isset($validated['to']) ? CarbonImmutable::parse((string) $validated['to']) : null;
+        $range = $this->resolveDateRange(
+            isset($validated['from']) ? CarbonImmutable::parse((string) $validated['from']) : null,
+            isset($validated['to']) ? CarbonImmutable::parse((string) $validated['to']) : null
+        );
+
+        if ($range === null) {
+            return ApiResponse::error(
+                'INVALID_RANGE',
+                sprintf('The requested period cannot exceed %d days.', self::MAX_RANGE_DAYS),
+                null,
+                422
+            );
+        }
+
+        [$from, $to] = $range;
 
         $overview = $this->analytics->overview($event->id, $from, $to);
         $attendanceSeries = $this->analytics->attendanceByHour($event->id, $from, $to);
@@ -165,9 +196,30 @@ class EventReportController extends Controller
         $dompdf->setPaper('a4', 'portrait');
         $dompdf->render();
 
+        $pageCount = $dompdf->getCanvas()->get_page_count();
+
+        if ($pageCount > self::PDF_PAGE_THRESHOLD) {
+            $font = $dompdf->getFontMetrics()->get_font('helvetica', 'normal');
+            $dompdf->getCanvas()->page_text(
+                40,
+                40,
+                'Reporte extenso: considera exportar la lista completa en CSV.',
+                $font,
+                10,
+                [0, 0, 0],
+                0.0,
+                0.0,
+                0.0,
+                'left',
+                false
+            );
+        }
+
         return response($dompdf->output(), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="summary.pdf"',
+            'X-Report-Pages' => (string) $pageCount,
+            'X-Report-Suggested-Export' => $pageCount > self::PDF_PAGE_THRESHOLD ? 'csv' : 'pdf',
         ]);
     }
 
@@ -193,11 +245,11 @@ class EventReportController extends Controller
         $period = [];
 
         if ($from !== null) {
-            $period[] = sprintf('From %s', $from->toDayDateTimeString());
+            $period[] = sprintf('Desde %s', $from->toDayDateTimeString());
         }
 
         if ($to !== null) {
-            $period[] = sprintf('To %s', $to->toDayDateTimeString());
+            $period[] = sprintf('Hasta %s', $to->toDayDateTimeString());
         }
 
         $occupancy = $overview['occupancy_rate'] !== null
@@ -210,111 +262,187 @@ class EventReportController extends Controller
             <head>
                 <meta charset="utf-8">
                 <style>
-                    body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; color: #1a1a1a; }
-                    h1 { font-size: 20px; margin-bottom: 0; }
-                    p.meta { color: #555; margin-top: 4px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+                    body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; color: #1a1a1a; padding: 24px; }
+                    header { border-bottom: 1px solid #e0e0e0; margin-bottom: 16px; }
+                    h1 { font-size: 20px; margin: 0; }
+                    h2 { font-size: 16px; margin-bottom: 8px; }
+                    p.meta { color: #555; margin: 4px 0 0; }
+                    section { margin-bottom: 24px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
                     th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
                     th { background-color: #f5f5f5; font-weight: bold; }
+                    .totals { display: flex; gap: 16px; margin-top: 12px; }
+                    .totals .card { background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px 16px; border-radius: 8px; flex: 1; }
+                    .totals .card strong { display: block; font-size: 12px; text-transform: uppercase; color: #4b5563; }
+                    .totals .card div { font-size: 20px; margin-top: 4px; font-weight: bold; }
+                    .chart-placeholder { height: 120px; border: 1px dashed #d1d5db; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 11px; margin-top: 12px; }
+                    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+                    .small { font-size: 11px; color: #6b7280; margin-top: 4px; }
                 </style>
             </head>
             <body>
-                <h1><?= e($eventName) ?> — Summary Report</h1>
-                <?php if (! empty($period)) : ?>
-                    <p class="meta"><?= e(implode(' · ', $period)) ?></p>
-                <?php endif; ?>
+                <header>
+                    <h1><?= e($eventName) ?></h1>
+                    <p class="meta">Resumen operativo<?= $period !== [] ? ': ' . implode(' · ', $period) : '' ?></p>
+                </header>
 
-                <h2>Overview</h2>
-                <table>
-                    <tr>
-                        <th>Invited</th>
-                        <th>Confirmed</th>
-                        <th>Valid Scans</th>
-                        <th>Duplicate Scans</th>
-                        <th>Unique Attendees</th>
-                        <th>Occupancy</th>
-                    </tr>
-                    <tr>
-                        <td><?= e((string) Arr::get($overview, 'invited', 0)) ?></td>
-                        <td><?= e((string) Arr::get($overview, 'confirmed', 0)) ?></td>
-                        <td><?= e((string) Arr::get($overview, 'attendances', 0)) ?></td>
-                        <td><?= e((string) Arr::get($overview, 'duplicates', 0)) ?></td>
-                        <td><?= e((string) Arr::get($overview, 'unique_attendees', 0)) ?></td>
-                        <td><?= e($occupancy) ?></td>
-                    </tr>
-                </table>
+                <section>
+                    <h2>Totales principales</h2>
+                    <div class="totals">
+                        <div class="card">
+                            <strong>Invitados</strong>
+                            <div><?= number_format((int) Arr::get($overview, 'invited', 0)) ?></div>
+                            <p class="small">Registros creados</p>
+                        </div>
+                        <div class="card">
+                            <strong>Confirmados</strong>
+                            <div><?= number_format((int) Arr::get($overview, 'confirmed', 0)) ?></div>
+                            <p class="small">RSVP positivos</p>
+                        </div>
+                        <div class="card">
+                            <strong>Check-ins válidos</strong>
+                            <div><?= number_format((int) Arr::get($overview, 'attendances', 0)) ?></div>
+                            <p class="small">Ingresos escaneados</p>
+                        </div>
+                        <div class="card">
+                            <strong>Ocupación</strong>
+                            <div><?= $occupancy ?></div>
+                            <p class="small">Porcentaje del aforo</p>
+                        </div>
+                    </div>
+                    <div class="chart-placeholder">Gráfica de evolución de asistencias</div>
+                </section>
 
-                <h2>RSVP Funnel</h2>
-                <table>
-                    <tr>
-                        <th>Invited</th>
-                        <th>Confirmed</th>
-                        <th>Declined</th>
-                    </tr>
-                    <tr>
-                        <td><?= e((string) Arr::get($funnel, 'invited', 0)) ?></td>
-                        <td><?= e((string) Arr::get($funnel, 'confirmed', 0)) ?></td>
-                        <td><?= e((string) Arr::get($funnel, 'declined', 0)) ?></td>
-                    </tr>
-                </table>
+                <section>
+                    <h2>Embudo de RSVP</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Estado</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($funnel as $status => $count) : ?>
+                                <tr>
+                                    <td><?= e((string) Str::title(str_replace('_', ' ', (string) $status))) ?></td>
+                                    <td><?= number_format((int) $count) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <div class="chart-placeholder">Mini gráfica de distribución por estado</div>
+                </section>
 
-                <h2>Attendance by Hour</h2>
-                <table>
-                    <tr>
-                        <th>Hour</th>
-                        <th>Valid</th>
-                        <th>Duplicate</th>
-                        <th>Unique</th>
-                    </tr>
-                    <?php foreach ($attendanceSeries as $row) : ?>
-                        <tr>
-                            <td><?= e((string) Arr::get($row, 'date_hour', '')) ?></td>
-                            <td><?= e((string) Arr::get($row, 'scans_valid', 0)) ?></td>
-                            <td><?= e((string) Arr::get($row, 'scans_duplicate', 0)) ?></td>
-                            <td><?= e((string) Arr::get($row, 'unique_guests_in', 0)) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </table>
+                <section>
+                    <h2>Asistencias por hora</h2>
+                    <div class="grid">
+                        <div>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Hora</th>
+                                        <th>Válidos</th>
+                                        <th>Duplicados</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($attendanceSeries as $row) : ?>
+                                        <tr>
+                                            <td><?= e((string) Arr::get($row, 'date_hour', '')) ?></td>
+                                            <td><?= number_format((int) Arr::get($row, 'scans_valid', 0)) ?></td>
+                                            <td><?= number_format((int) Arr::get($row, 'scans_duplicate', 0)) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="chart-placeholder">Sparklines de actividad por hora</div>
+                    </div>
+                </section>
 
-                <h2>Checkpoint Totals</h2>
-                <table>
-                    <tr>
-                        <th>Checkpoint</th>
-                        <th>Valid</th>
-                        <th>Duplicate</th>
-                        <th>Invalid</th>
-                    </tr>
-                    <?php foreach ($checkpoints as $checkpoint) :
-                        $id = Arr::get($checkpoint, 'checkpoint_id');
-                        $name = $id !== null && isset($checkpointNames[$id]) ? $checkpointNames[$id] : 'Unassigned';
-                    ?>
-                        <tr>
-                            <td><?= e((string) $name) ?></td>
-                            <td><?= e((string) Arr::get($checkpoint, 'valid', 0)) ?></td>
-                            <td><?= e((string) Arr::get($checkpoint, 'duplicate', 0)) ?></td>
-                            <td><?= e((string) Arr::get($checkpoint, 'invalid', 0)) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </table>
+                <section>
+                    <h2>Totales por checkpoint</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Checkpoint</th>
+                                <th>Válidos</th>
+                                <th>Duplicados</th>
+                                <th>Inválidos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($checkpoints as $row) :
+                                $id = Arr::get($row, 'checkpoint_id');
+                                $name = $id !== null && isset($checkpointNames[(string) $id]) ? $checkpointNames[(string) $id] : 'Sin asignar';
+                            ?>
+                                <tr>
+                                    <td><?= e((string) $name) ?></td>
+                                    <td><?= number_format((int) Arr::get($row, 'valid', 0)) ?></td>
+                                    <td><?= number_format((int) Arr::get($row, 'duplicate', 0)) ?></td>
+                                    <td><?= number_format((int) Arr::get($row, 'invalid', 0)) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </section>
 
-                <h2>Guests by List</h2>
-                <table>
-                    <tr>
-                        <th>List</th>
-                        <th>Guests</th>
-                    </tr>
-                    <?php foreach ($guestLists as $list) : ?>
-                        <tr>
-                            <td><?= e((string) Arr::get($list, 'guest_list_name', 'Unassigned')) ?></td>
-                            <td><?= e((string) Arr::get($list, 'guests', 0)) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </table>
+                <section>
+                    <h2>Listas de invitados</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Lista</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($guestLists as $row) : ?>
+                                <tr>
+                                    <td><?= e((string) (Arr::get($row, 'guest_list_name') ?? 'Sin lista')) ?></td>
+                                    <td><?= number_format((int) Arr::get($row, 'guests', 0)) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </section>
             </body>
         </html>
         <?php
 
         return (string) ob_get_clean();
     }
-}
 
+    /**
+     * Resolve the requested date range enforcing defaults and limits.
+     *
+     * @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable}|null
+     */
+    private function resolveDateRange(?CarbonImmutable $from, ?CarbonImmutable $to): ?array
+    {
+        if ($from === null && $to === null) {
+            $to = CarbonImmutable::now();
+            $from = $to->subHours(self::DEFAULT_RANGE_HOURS);
+        } elseif ($from !== null && $to === null) {
+            $limit = $from->addDays(self::MAX_RANGE_DAYS);
+            $to = CarbonImmutable::now();
+
+            if ($to->greaterThan($limit)) {
+                $to = $limit;
+            }
+        } elseif ($from === null && $to !== null) {
+            $from = $to->subDays(self::MAX_RANGE_DAYS);
+        }
+
+        if ($from !== null && $to !== null && $from->greaterThan($to)) {
+            return null;
+        }
+
+        if ($from !== null && $to !== null && $from->addDays(self::MAX_RANGE_DAYS)->lessThan($to)) {
+            return null;
+        }
+
+        return [$from, $to];
+    }
+}
