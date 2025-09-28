@@ -22,17 +22,21 @@ import {
   TableRow,
   Tooltip,
   Typography,
+  Divider,
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EventSeatIcon from '@mui/icons-material/EventSeat';
 import BlockIcon from '@mui/icons-material/Block';
 import DeleteIcon from '@mui/icons-material/Delete';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
 import type { GuestResource } from '../../hooks/useGuestsApi';
 import {
   useDeleteTicket,
   useGuestTickets,
   useIssueTicket,
   useUpdateTicket,
+  useRotateTicketQr,
   type TicketPayload,
   type TicketResource,
 } from '../../hooks/useTicketsApi';
@@ -41,6 +45,7 @@ import { useToast } from '../common/ToastProvider';
 import IssueTicketDialog from './IssueTicketDialog';
 import EditSeatDialog from './EditSeatDialog';
 import TicketStatusChip from './TicketStatusChip';
+import TicketQrDialog from './TicketQrDialog';
 
 interface GuestTicketsTabProps {
   guest: GuestResource;
@@ -95,6 +100,7 @@ const GuestTicketsTab = ({ guest }: GuestTicketsTabProps) => {
   const [selectedTicket, setSelectedTicket] = useState<TicketResource | null>(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
 
   const ticketLimit = useMemo(() => {
     const plusOnes = guest.allow_plus_ones ? guest.plus_ones_limit ?? 0 : 0;
@@ -140,6 +146,18 @@ const GuestTicketsTab = ({ guest }: GuestTicketsTabProps) => {
     onError: (error) => {
       showToast({
         message: extractApiErrorMessage(error, 'No se pudo eliminar el ticket.'),
+        severity: 'error',
+      });
+    },
+  });
+
+  const rotateQrMutation = useRotateTicketQr(guest.id, {
+    onSuccess: () => {
+      showToast({ message: 'QR rotado correctamente.', severity: 'success' });
+    },
+    onError: (error) => {
+      showToast({
+        message: extractApiErrorMessage(error, 'No se pudo rotar el QR del ticket.'),
         severity: 'error',
       });
     },
@@ -269,6 +287,37 @@ const GuestTicketsTab = ({ guest }: GuestTicketsTabProps) => {
         <MenuItem
           onClick={() => {
             handleCloseMenu();
+            setQrDialogOpen(true);
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center">
+            <QrCode2Icon fontSize="small" />
+            <Typography variant="body2">Ver QR</Typography>
+          </Stack>
+        </MenuItem>
+        <MenuItem
+          disabled={selectedTicket?.status !== 'issued' || rotateQrMutation.isPending}
+          onClick={async () => {
+            if (!selectedTicket) {
+              return;
+            }
+            handleCloseMenu();
+            try {
+              await rotateQrMutation.mutateAsync({ ticketId: selectedTicket.id });
+            } catch {
+              // handled in mutation
+            }
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center">
+            <AutorenewIcon fontSize="small" />
+            <Typography variant="body2">Rotar QR</Typography>
+          </Stack>
+        </MenuItem>
+        <Divider sx={{ my: 0.5 }} />
+        <MenuItem
+          onClick={() => {
+            handleCloseMenu();
             setEditSeatDialogOpen(true);
           }}
         >
@@ -319,6 +368,15 @@ const GuestTicketsTab = ({ guest }: GuestTicketsTabProps) => {
         onSubmit={handleSeatSubmit}
         ticket={selectedTicket}
         isSubmitting={updateMutation.isPending}
+      />
+
+      <TicketQrDialog
+        open={qrDialogOpen}
+        ticket={qrDialogOpen ? selectedTicket : null}
+        onClose={() => {
+          setQrDialogOpen(false);
+          setSelectedTicket(null);
+        }}
       />
 
       <Dialog

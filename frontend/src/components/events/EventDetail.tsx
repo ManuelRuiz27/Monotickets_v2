@@ -20,6 +20,7 @@ import { extractApiErrorMessage } from '../../utils/apiErrors';
 import EventGuestsTab from './EventGuestsTab';
 import EventVenuesTab from './EventVenuesTab';
 import EventStatusChip from './EventStatusChip';
+import ScanSimulator from '../scans/ScanSimulator';
 
 interface EventDetailProps {
   eventId: string;
@@ -181,6 +182,8 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
             <DetailItem label="Última actualización" value={formatDateTime(eventData.updated_at ?? null, eventData.timezone)} />
           </Grid>
         </Grid>
+
+        <ScanSimulator eventId={eventData.id} />
       </Stack>
     );
   };
