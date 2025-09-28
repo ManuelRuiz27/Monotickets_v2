@@ -262,3 +262,139 @@ button:disabled {
   background: #e0f2fe;
   color: #0c4a6e;
 }
+
+.sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  font-size: 0.95rem;
+}
+
+.sync-banner--warning {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.sync-banner button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sync-banner button:hover {
+  text-decoration: underline;
+}
+
+.scan-history {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.scan-history__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.scan-history__pending {
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.scan-history__empty {
+  font-size: 0.95rem;
+  color: #475569;
+  margin: 0;
+}
+
+.scan-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.scan-history__item {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.scan-history__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.scan-history__code {
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.scan-history__timestamp {
+  font-style: italic;
+}
+
+.scan-history__message {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #1f2933;
+}
+
+.scan-history__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.scan-history__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.scan-history__badge--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.scan-history__badge--confirmed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.scan-history__badge--warning {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.scan-history__badge--offline {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.scan-history__reason {
+  font-size: 0.75rem;
+  color: #475569;
+}

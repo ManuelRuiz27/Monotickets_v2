@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { BrowserMultiFormatReader, NotFoundException, type IScannerControls } from '@zxing/browser';
 import { useMutation } from '@tanstack/react-query';
 import { DateTime } from 'luxon';
-import { scanTicket, type ScanRequest, type ScanResponsePayload } from '../../api/scan';
+import { type ScanRequest, type ScanResponsePayload } from '../../api/scan';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
+import { processScan } from '../../services/scanSync';
 
 const RESULT_VARIANT: Record<string, 'valid' | 'warning' | 'invalid' | 'info'> = {
   valid: 'valid',
@@ -49,12 +50,12 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
   const [lastError, setLastError] = useState<string | null>(null);
 
   const scanMutation = useMutation({
-    mutationFn: (payload: ScanRequest) => scanTicket(payload),
+    mutationFn: (payload: ScanRequest) => processScan(payload),
     onSuccess: (response) => {
-      setLastResult(response.data);
+      setLastResult(response);
       setLastError(null);
       setIgnoredMessage(null);
-      playSoundForResult(response.data.result);
+      playSoundForResult(response.result);
     },
     onError: (error) => {
       const message = extractApiErrorMessage(error, 'No se pudo registrar el escaneo.');
