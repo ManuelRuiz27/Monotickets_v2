@@ -65,6 +65,26 @@ class TicketController extends Controller
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
         }
 
+        $guest->loadMissing('event');
+
+        if ($guest->event === null || (string) $guest->event->id !== (string) $guest->event_id) {
+            $this->throwValidationException([
+                'guest_id' => ['The guest is not associated with a valid event.'],
+            ]);
+        }
+
+        if ($guest->event->status === 'archived') {
+            return ApiResponse::error(
+                'EVENT_ARCHIVED',
+                'Tickets cannot be issued for archived events.',
+                [
+                    'event_id' => (string) $guest->event->id,
+                    'guest_id' => (string) $guest->id,
+                ],
+                409
+            );
+        }
+
         $activeTickets = Ticket::query()
             ->where('guest_id', $guest->id)
             ->count();
@@ -174,11 +194,29 @@ class TicketController extends Controller
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
         }
 
+        $ticket->loadMissing(['guest', 'event']);
+
+        if ($ticket->guest === null || (string) $ticket->guest->event_id !== (string) $ticket->event_id) {
+            $this->throwValidationException([
+                'ticket_id' => ['The ticket guest does not belong to the same event.'],
+            ]);
+        }
+
         $validated = $request->validated();
 
         if ($validated === []) {
             return response()->json([
                 'data' => $this->formatTicket($ticket),
+            ]);
+        }
+
+        if (
+            $ticket->status === 'used'
+            && array_key_exists('status', $validated)
+            && $validated['status'] === 'revoked'
+        ) {
+            $this->throwValidationException([
+                'status' => ['Used tickets cannot be revoked.'],
             ]);
         }
 
@@ -283,6 +321,26 @@ class TicketController extends Controller
 
         if ($ticket === null) {
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
+        }
+
+        $ticket->loadMissing(['guest', 'event']);
+
+        if ($ticket->guest === null || (string) $ticket->guest->event_id !== (string) $ticket->event_id) {
+            $this->throwValidationException([
+                'ticket_id' => ['The ticket guest does not belong to the same event.'],
+            ]);
+        }
+
+        if ($ticket->status === 'used') {
+            return ApiResponse::error(
+                'TICKET_ALREADY_USED',
+                'Used tickets cannot be revoked.',
+                [
+                    'ticket_id' => (string) $ticket->id,
+                    'guest_id' => (string) $ticket->guest_id,
+                ],
+                409
+            );
         }
 
         $tenantId = (string) $ticket->event->tenant_id;
