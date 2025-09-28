@@ -6,13 +6,16 @@ use App\Models\Attendance;
 use App\Models\AuditLog;
 use App\Models\Checkpoint;
 use App\Models\Event;
+use App\Models\HostessAssignment;
 use App\Models\Guest;
 use App\Models\Qr;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\Venue;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Tests\Concerns\CreatesUsers;
 use Tests\TestCase;
@@ -40,6 +43,8 @@ class ScanFeatureTest extends TestCase
             'status' => 'published',
             'checkin_policy' => 'single',
         ]);
+
+        $this->assignHostessToEvent($hostess, $event);
 
         [$ticket, $qr] = $this->createTicketWithQr($event);
         $scanTime = CarbonImmutable::parse('2024-07-01T10:15:00Z');
@@ -87,6 +92,8 @@ class ScanFeatureTest extends TestCase
             'status' => 'published',
             'checkin_policy' => 'single',
         ]);
+
+        $this->assignHostessToEvent($hostess, $event);
 
         [$ticket, $qr] = $this->createTicketWithQr($event);
 
@@ -142,6 +149,8 @@ class ScanFeatureTest extends TestCase
             'checkin_policy' => 'multiple',
         ]);
 
+        $this->assignHostessToEvent($hostess, $event);
+
         [$ticket, $qr] = $this->createTicketWithQr($event);
 
         $firstResponse = $this->actingAs($hostess, 'api')->postJson('/scan', [
@@ -178,6 +187,8 @@ class ScanFeatureTest extends TestCase
             'status' => 'published',
             'checkin_policy' => 'single',
         ]);
+
+        $this->assignHostessToEvent($hostess, $event);
 
         [$ticket, $qr] = $this->createTicketWithQr($event, [
             'status' => 'revoked',
@@ -218,6 +229,8 @@ class ScanFeatureTest extends TestCase
             'status' => 'published',
             'checkin_policy' => 'single',
         ]);
+
+        $this->assignHostessToEvent($hostess, $event);
 
         [$ticket, $qr] = $this->createTicketWithQr($event);
 
@@ -261,6 +274,8 @@ class ScanFeatureTest extends TestCase
             'checkin_policy' => 'single',
         ]);
 
+        $this->assignHostessToEvent($hostess, $event);
+
         $expiresAt = CarbonImmutable::parse('2024-07-01T09:00:00Z');
         [$ticket, $qr] = $this->createTicketWithQr($event, [
             'expires_at' => $expiresAt,
@@ -302,6 +317,8 @@ class ScanFeatureTest extends TestCase
             'checkin_policy' => 'single',
         ]);
 
+        $this->assignHostessToEvent($hostess, $event);
+
         $this->createTicketWithQr($event);
 
         $response = $this->actingAs($hostess, 'api')->postJson('/scan', [
@@ -328,6 +345,8 @@ class ScanFeatureTest extends TestCase
             'status' => 'published',
             'checkin_policy' => 'single',
         ]);
+
+        $this->assignHostessToEvent($hostess, $event);
 
         [$ticket, $qr] = $this->createTicketWithQr($event, [
             'is_active' => false,
@@ -365,6 +384,8 @@ class ScanFeatureTest extends TestCase
             'checkin_policy' => 'single',
         ]);
 
+        $this->assignHostessToEvent($hostess, $event);
+
         $otherEvent = Event::factory()->for($tenant)->create([
             'organizer_user_id' => $organizer->id,
             'status' => 'published',
@@ -396,6 +417,176 @@ class ScanFeatureTest extends TestCase
         ]);
     }
 
+    public function test_hostess_without_assignment_cannot_scan(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'organizer_user_id' => $organizer->id,
+            'status' => 'published',
+            'checkin_policy' => 'single',
+        ]);
+
+        [$ticket, $qr] = $this->createTicketWithQr($event);
+        $scanTime = CarbonImmutable::parse('2024-07-01T14:00:00Z');
+
+        $unauthorized = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => $qr->code,
+            'scanned_at' => $scanTime->toIso8601String(),
+            'device_id' => 'assignment-check',
+        ]);
+
+        $unauthorized->assertForbidden();
+        $this->assertSame(0, Attendance::query()->count());
+
+        $this->assignHostessToEvent($hostess, $event);
+
+        $authorized = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => $qr->code,
+            'scanned_at' => $scanTime->addMinute()->toIso8601String(),
+            'device_id' => 'assignment-check',
+        ]);
+
+        $authorized->assertOk();
+        $authorized->assertJsonPath('data.result', 'valid');
+    }
+
+    public function test_hostess_assignment_respects_venue_scope(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'organizer_user_id' => $organizer->id,
+            'status' => 'published',
+            'checkin_policy' => 'single',
+        ]);
+
+        $venueAlpha = Venue::factory()->for($event)->create(['name' => 'Alpha Venue']);
+        $venueBravo = Venue::factory()->for($event)->create(['name' => 'Bravo Venue']);
+        $checkpointAlpha = Checkpoint::factory()->for($event)->for($venueAlpha)->create();
+        $checkpointBravo = Checkpoint::factory()->for($event)->for($venueBravo)->create();
+
+        [$ticket, $qr] = $this->createTicketWithQr($event);
+
+        $this->assignHostessToEvent($hostess, $event, $venueAlpha);
+
+        $forbidden = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => $qr->code,
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T15:00:00Z')->toIso8601String(),
+            'device_id' => 'venue-check',
+            'checkpoint_id' => $checkpointBravo->id,
+        ]);
+
+        $forbidden->assertForbidden();
+        $this->assertSame(0, Attendance::query()->count());
+
+        $this->assignHostessToEvent($hostess, $event, $venueBravo);
+
+        $allowed = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => $qr->code,
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T15:05:00Z')->toIso8601String(),
+            'device_id' => 'venue-check',
+            'checkpoint_id' => $checkpointBravo->id,
+        ]);
+
+        $allowed->assertOk();
+        $allowed->assertJsonPath('data.result', 'valid');
+    }
+
+    public function test_scan_requests_are_idempotent_for_identical_payloads(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'organizer_user_id' => $organizer->id,
+            'status' => 'published',
+            'checkin_policy' => 'single',
+        ]);
+
+        $this->assignHostessToEvent($hostess, $event);
+
+        [$ticket, $qr] = $this->createTicketWithQr($event);
+        $payload = [
+            'qr_code' => $qr->code,
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T16:00:00Z')->toIso8601String(),
+            'device_id' => 'idempotent-device',
+        ];
+
+        $firstResponse = $this->actingAs($hostess, 'api')->postJson('/scan', $payload);
+        $firstResponse->assertOk();
+        $firstResponse->assertJsonPath('data.result', 'valid');
+
+        $secondResponse = $this->actingAs($hostess, 'api')->postJson('/scan', $payload);
+        $secondResponse->assertOk();
+
+        $this->assertSame($firstResponse->json('data'), $secondResponse->json('data'));
+        $this->assertSame(1, Attendance::query()->where('ticket_id', $ticket->id)->count());
+    }
+
+    public function test_simultaneous_scans_produce_valid_and_duplicate_results(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'organizer_user_id' => $organizer->id,
+            'status' => 'published',
+            'checkin_policy' => 'single',
+        ]);
+
+        $this->assignHostessToEvent($hostess, $event);
+
+        [$ticket, $qr] = $this->createTicketWithQr($event);
+
+        $payload = [
+            'qr_code' => $qr->code,
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T17:00:00Z')->toIso8601String(),
+            'device_id' => 'concurrent-1',
+        ];
+
+        $secondPayload = array_merge($payload, ['device_id' => 'concurrent-2']);
+        $secondResponse = null;
+
+        Event::listen('eloquent.creating: '.Attendance::class, function () use (&$secondResponse, $hostess, $secondPayload): void {
+            static $hasRun = false;
+
+            if ($hasRun) {
+                return;
+            }
+
+            $hasRun = true;
+            $secondResponse = $this->actingAs($hostess, 'api')->postJson('/scan', $secondPayload);
+        });
+
+        $firstResponse = $this->actingAs($hostess, 'api')->postJson('/scan', $payload);
+
+        $this->assertNotNull($secondResponse);
+
+        $firstResponse->assertOk();
+        $firstResponse->assertJsonPath('data.result', 'valid');
+
+        $secondResponse->assertOk();
+        $secondResponse->assertJsonPath('data.result', 'duplicate');
+
+        $this->assertSame(2, Attendance::query()->where('ticket_id', $ticket->id)->count());
+        $this->assertSame(
+            ['duplicate', 'valid'],
+            Attendance::query()
+                ->where('ticket_id', $ticket->id)
+                ->pluck('result')
+                ->sort()
+                ->values()
+                ->toArray()
+        );
+    }
+
     public function test_batch_returns_multi_status_payload(): void
     {
         $tenant = Tenant::factory()->create();
@@ -407,6 +598,8 @@ class ScanFeatureTest extends TestCase
             'status' => 'published',
             'checkin_policy' => 'single',
         ]);
+
+        $this->assignHostessToEvent($hostess, $event);
 
         [$firstTicket, $firstQr] = $this->createTicketWithQr($event);
         [$secondTicket, $secondQr] = $this->createTicketWithQr($event);
@@ -459,6 +652,10 @@ class ScanFeatureTest extends TestCase
         $response->assertNull($response->json('data.2.attendance'));
         $response->assertNull($response->json('data.2.ticket'));
         $response->assertJsonPath('data.2.reason', 'qr_not_found');
+        $response->assertJsonPath('meta.summary.valid', 1);
+        $response->assertJsonPath('meta.summary.duplicate', 1);
+        $response->assertJsonPath('meta.summary.errors', 1);
+        $response->assertJsonPath('meta.total_scans', 3);
 
         $this->assertDatabaseHas('attendances', [
             'ticket_id' => $firstTicket->id,
@@ -471,6 +668,20 @@ class ScanFeatureTest extends TestCase
         ]);
 
         $this->assertSame(3, Attendance::query()->count());
+    }
+
+    private function assignHostessToEvent(User $hostess, Event $event, ?Venue $venue = null, ?Checkpoint $checkpoint = null): void
+    {
+        HostessAssignment::query()->create([
+            'tenant_id' => $event->tenant_id,
+            'hostess_user_id' => $hostess->id,
+            'event_id' => $event->id,
+            'venue_id' => $venue?->id,
+            'checkpoint_id' => $checkpoint?->id,
+            'starts_at' => CarbonImmutable::now()->subHour(),
+            'ends_at' => CarbonImmutable::now()->addHour(),
+            'is_active' => true,
+        ]);
     }
 
     /**

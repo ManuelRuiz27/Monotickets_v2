@@ -249,6 +249,7 @@ class ScanController extends Controller
             'data' => $responses,
             'meta' => [
                 'summary' => $summary,
+                'total_scans' => count($responses),
             ],
         ], 207);
     }
@@ -678,18 +679,31 @@ class ScanController extends Controller
     {
         $now = Carbon::parse($scanTime->toIso8601String());
 
+        $venueId = $checkpoint?->venue_id;
+
         return HostessAssignment::query()
             ->forTenant((string) $event->tenant_id)
             ->where('hostess_user_id', $authUser->id)
             ->where('event_id', $event->id)
-            ->when($checkpoint !== null, function ($query) use ($checkpoint): void {
-                $query->where(function ($constraint) use ($checkpoint): void {
-                    $constraint
-                        ->whereNull('checkpoint_id')
-                        ->orWhere('checkpoint_id', $checkpoint->id);
+            ->when($checkpoint !== null, function ($query) use ($checkpoint, $venueId): void {
+                $query->where(function ($constraint) use ($checkpoint, $venueId): void {
+                    $constraint->where('checkpoint_id', $checkpoint->id);
+
+                    $constraint->orWhere(function ($assignment) use ($venueId): void {
+                        $assignment->whereNull('checkpoint_id')
+                            ->where(function ($venueScope) use ($venueId): void {
+                                $venueScope->whereNull('venue_id');
+
+                                if ($venueId !== null) {
+                                    $venueScope->orWhere('venue_id', $venueId);
+                                }
+                            });
+                    });
                 });
             }, function ($query): void {
-                $query->whereNull('checkpoint_id');
+                $query
+                    ->whereNull('checkpoint_id')
+                    ->whereNull('venue_id');
             })
             ->currentlyActive($now)
             ->exists();
