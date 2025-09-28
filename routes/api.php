@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\CheckpointController;
 use App\Http\Controllers\DeviceController;
+use App\Http\Controllers\EventAttendanceController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\GuestController;
 use App\Http\Controllers\GuestListController;
@@ -92,6 +93,15 @@ Route::middleware('api')->group(function (): void {
                 ->name('events.venues.checkpoints.update');
             Route::delete('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'destroy'])
                 ->name('events.venues.checkpoints.destroy');
+        });
+
+    Route::middleware(['auth:api', 'role:superadmin,organizer,hostess'])
+        ->prefix('events')
+        ->group(function (): void {
+            Route::get('{event_id}/attendances/since', [EventAttendanceController::class, 'attendancesSince'])
+                ->name('events.attendances.since');
+            Route::get('{event_id}/tickets/{ticket_id}/state', [EventAttendanceController::class, 'ticketState'])
+                ->name('events.tickets.state');
         });
 
     Route::middleware(['auth:api', 'role:superadmin,organizer'])
