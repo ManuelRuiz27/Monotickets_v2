@@ -6,15 +6,18 @@ use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\CheckpointController;
+use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\GuestController;
 use App\Http\Controllers\GuestListController;
-use App\Http\Controllers\QrController;
-use App\Http\Controllers\TicketController;
-use App\Http\Controllers\ScanController;
-use App\Http\Controllers\VenueController;
-use App\Http\Controllers\UserController;
+use App\Http\Controllers\HostessAssignmentController;
+use App\Http\Controllers\HostessAssignmentMeController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\QrController;
+use App\Http\Controllers\ScanController;
+use App\Http\Controllers\TicketController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\VenueController;
 use App\Http\Middleware\EnsureTenantHeader;
 
 /*
@@ -117,6 +120,16 @@ Route::middleware('api')->group(function (): void {
         });
 
     Route::middleware(['auth:api', 'role:superadmin,organizer'])
+        ->prefix('hostess-assignments')
+        ->group(function (): void {
+            Route::get('/', [HostessAssignmentController::class, 'index'])->name('hostess-assignments.index');
+            Route::post('/', [HostessAssignmentController::class, 'store'])->name('hostess-assignments.store');
+            Route::get('{assignmentId}', [HostessAssignmentController::class, 'show'])->name('hostess-assignments.show');
+            Route::patch('{assignmentId}', [HostessAssignmentController::class, 'update'])->name('hostess-assignments.update');
+            Route::delete('{assignmentId}', [HostessAssignmentController::class, 'destroy'])->name('hostess-assignments.destroy');
+        });
+
+    Route::middleware(['auth:api', 'role:superadmin,organizer'])
         ->prefix('tickets')
         ->group(function (): void {
             Route::get('{ticket_id}', [TicketController::class, 'show'])->name('tickets.show');
@@ -127,6 +140,8 @@ Route::middleware('api')->group(function (): void {
         });
 
     Route::middleware(['auth:api', 'role:superadmin,organizer,hostess'])->group(function (): void {
+        Route::post('devices/register', [DeviceController::class, 'register'])->name('devices.register');
+        Route::get('me/assignments', [HostessAssignmentMeController::class, 'index'])->name('me.assignments.index');
         Route::post('scan', [ScanController::class, 'store'])->name('scan.store');
         Route::post('scan/batch', [ScanController::class, 'batch'])->name('scan.batch');
     });
