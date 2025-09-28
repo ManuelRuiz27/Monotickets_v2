@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Events\ImportProcessingCompleted;
+use App\Events\ImportProcessingStarted;
 use App\Models\Guest;
 use App\Models\GuestList;
 use App\Models\Import;
@@ -17,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
+use function event;
 
 /**
  * Process uploaded import files and materialise guests.
@@ -94,6 +97,9 @@ class ProcessImportJob implements ShouldQueue
 
         $import->status = 'processing';
         $import->save();
+        $import->refresh();
+
+        event(new ImportProcessingStarted($import));
 
         $rowsOk = 0;
         $rowsFailed = 0;
@@ -163,6 +169,10 @@ class ProcessImportJob implements ShouldQueue
             $import->report_file_url = $import->report_file_url ?? $this->generateReportUrl($import->id);
             $import->save();
         }
+
+        $import->refresh();
+
+        event(new ImportProcessingCompleted($import));
     }
 
     /**
@@ -225,7 +235,7 @@ class ProcessImportJob implements ShouldQueue
                 $normalised = Str::lower($email);
 
                 if (in_array($normalised, $processedEmails, true)) {
-                    throw new RuntimeException('A guest with this email is duplicated in the file.');
+                    throw new RuntimeException('duplicated email');
                 }
 
                 $exists = Guest::query()

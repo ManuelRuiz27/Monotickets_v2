@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ProcessImportJob;
+use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\Guest;
 use App\Models\Tenant;
@@ -93,6 +94,7 @@ class ImportFeatureTest extends TestCase
         $statusResponse->assertOk();
         $statusResponse->assertJsonPath('data.status', 'failed');
         $statusResponse->assertJsonPath('data.rows_total', 3);
+        $statusResponse->assertJsonPath('data.progress', 1);
         $statusResponse->assertJsonPath('data.report_file_url', fn ($value) => ! empty($value));
 
         $rowsResponse = $this->actingAs($organizer, 'api')
@@ -103,6 +105,24 @@ class ImportFeatureTest extends TestCase
         $rowsResponse->assertJsonCount(1, 'data');
         $rowsResponse->assertJsonPath('data.0.status', 'failed');
         $rowsResponse->assertJsonPath('data.0.row_num', 3);
+        $rowsResponse->assertJsonPath('data.0.error_msg', 'duplicated email');
+
+        $auditLogs = AuditLog::query()
+            ->where('entity', 'import')
+            ->where('entity_id', $importId)
+            ->orderBy('occurred_at')
+            ->get();
+
+        $this->assertCount(2, $auditLogs);
+        $this->assertSame('import_started', $auditLogs->first()->action);
+        $this->assertSame('processing', $auditLogs->first()->diff_json['status'] ?? null);
+
+        $completedAudit = $auditLogs->last();
+        $this->assertSame('import_completed', $completedAudit->action);
+        $this->assertSame('failed', $completedAudit->diff_json['status'] ?? null);
+        $this->assertSame(3, $completedAudit->diff_json['rows_total'] ?? null);
+        $this->assertSame(2, $completedAudit->diff_json['rows_ok'] ?? null);
+        $this->assertSame(1, $completedAudit->diff_json['rows_failed'] ?? null);
 
         unlink($csvPath);
     }

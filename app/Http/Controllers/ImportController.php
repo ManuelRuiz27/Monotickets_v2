@@ -188,6 +188,7 @@ class ImportController extends Controller
             'rows_total' => $import->rows_total,
             'rows_ok' => $import->rows_ok,
             'rows_failed' => $import->rows_failed,
+            'progress' => $this->calculateImportProgress($import),
             'report_file_url' => $import->report_file_url,
             'created_at' => optional($import->created_at)->toISOString(),
             'updated_at' => optional($import->updated_at)->toISOString(),
@@ -210,5 +211,30 @@ class ImportController extends Controller
             'created_at' => optional($row->created_at)->toISOString(),
             'updated_at' => optional($row->updated_at)->toISOString(),
         ];
+    }
+
+    private function calculateImportProgress(Import $import): float
+    {
+        if ($import->rows_total <= 0) {
+            return $import->status === 'completed' ? 1.0 : 0.0;
+        }
+
+        $processed = $import->rows_ok + $import->rows_failed;
+
+        if ($processed <= 0) {
+            return 0.0;
+        }
+
+        $progress = $processed / $import->rows_total;
+
+        if ($progress > 1) {
+            return 1.0;
+        }
+
+        if ($progress < 0) {
+            return 0.0;
+        }
+
+        return round($progress, 4);
     }
 }
