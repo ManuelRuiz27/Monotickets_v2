@@ -7,6 +7,7 @@ import EventForm from './pages/EventForm';
 import EventDetail from './pages/EventDetail';
 import VenueDetail from './pages/VenueDetail';
 import GuestDetail from './pages/GuestDetail';
+import Hostess from './pages/Hostess';
 import { RequireAuth, RequireRole } from './routes/guards';
 import Layout from './components/Layout';
 
@@ -75,6 +76,14 @@ function App() {
           element={
             <RequireRole roles={['organizer', 'superadmin']}>
               <EventForm />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="hostess"
+          element={
+            <RequireRole roles={['hostess', 'organizer']}>
+              <Hostess />
             </RequireRole>
           }
         />

@@ -4,6 +4,8 @@ import { useAuthStore } from '../auth/store';
 const Layout = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const canManageEvents = user?.role === 'organizer' || user?.role === 'superadmin';
+  const canAccessHostess = user ? ['hostess', 'organizer'].includes(user.role) : false;
 
   const handleLogout = () => {
     logout();
@@ -18,8 +20,9 @@ const Layout = () => {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
-          <NavLink to="/events">Eventos</NavLink>
-          <NavLink to="/users">Usuarios</NavLink>
+          {canManageEvents && <NavLink to="/events">Eventos</NavLink>}
+          {canManageEvents && <NavLink to="/users">Usuarios</NavLink>}
+          {canAccessHostess && <NavLink to="/hostess">Hostess</NavLink>}
           {user && (
             <span style={{ marginLeft: 'auto', paddingRight: '1rem' }}>
               {user.name} · {user.role}
