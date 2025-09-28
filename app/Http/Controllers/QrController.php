@@ -114,6 +114,8 @@ class QrController extends Controller
             'rotated',
             $tenantId,
             [
+                'event_id' => $ticket->event_id,
+                'guest_id' => $ticket->guest_id,
                 'ticket_id' => $ticket->id,
                 'version' => $qr->version,
             ]

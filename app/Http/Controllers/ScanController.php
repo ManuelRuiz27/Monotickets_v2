@@ -383,10 +383,12 @@ class ScanController extends Controller
                 $request,
                 $authUser,
                 'ticket',
-                $ticket->id,
+                (string) $ticket->id,
                 $action,
                 $tenantId,
                 [
+                    'event_id' => $event->id,
+                    'guest_id' => $ticket->guest_id,
                     'result' => $result,
                     'attendance_id' => $attendance->id,
                     'checkpoint_id' => $checkpoint?->id,
@@ -399,9 +401,11 @@ class ScanController extends Controller
                 $authUser,
                 $action,
                 'ticket',
-                $ticket->id,
+                (string) $ticket->id,
                 $tenantId,
                 [
+                    'event_id' => $event->id,
+                    'guest_id' => $ticket->guest_id,
                     'result' => $result,
                 ]
             );
