@@ -48,6 +48,7 @@ class WarmUpDashboards implements ShouldQueue
             $baseParams['ttl'] = $this->ttlSeconds;
         }
 
+        $snapshots->compute('overview', $baseParams);
         $snapshots->compute('attendance_by_hour', $baseParams);
         $snapshots->compute('rsvp_funnel', $baseParams);
         $snapshots->compute('checkpoint_totals', $baseParams);

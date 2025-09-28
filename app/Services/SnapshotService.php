@@ -131,6 +131,7 @@ class SnapshotService
         $to = Arr::get($params, 'to');
 
         return match ($type) {
+            'overview' => $this->analytics->overview($eventId, $from, $to),
             'attendance_by_hour' => $this->analytics->attendanceByHour($eventId, $from, $to),
             'rsvp_funnel' => $this->analytics->rsvpFunnel($eventId),
             'checkpoint_totals' => $this->analytics->checkpointTotals($eventId, $from, $to),
