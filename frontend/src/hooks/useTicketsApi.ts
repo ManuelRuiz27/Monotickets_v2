@@ -36,6 +36,20 @@ export interface TicketSingleResponse {
   data: TicketResource;
 }
 
+export interface QrResource {
+  id: string;
+  ticket_id: string;
+  code: string;
+  version: number;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface QrSingleResponse {
+  data: QrResource;
+}
+
 export interface TicketPayload {
   type?: TicketType;
   price_cents?: number | null;
@@ -119,6 +133,47 @@ export function useDeleteTicket(
       }),
     onSuccess: (data, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: ['guests', guestId, 'tickets'] });
+      onSuccess?.(data, variables, context);
+    },
+    ...rest,
+  });
+}
+
+export function useTicketQr(
+  ticketId: string | undefined,
+  options?: Omit<
+    UseQueryOptions<QrSingleResponse, unknown, QrSingleResponse, [string, string, string]>,
+    'queryKey' | 'queryFn'
+  >,
+) {
+  const queryKey: [string, string, string] = useMemo(
+    () => ['tickets', ticketId ?? '', 'qr'],
+    [ticketId],
+  );
+
+  return useQuery<QrSingleResponse, unknown, QrSingleResponse, [string, string, string]>({
+    queryKey,
+    queryFn: async () => apiFetch<QrSingleResponse>(`/tickets/${ticketId}/qr`),
+    enabled: Boolean(ticketId),
+    ...options,
+  });
+}
+
+export function useRotateTicketQr(
+  guestId: string,
+  options?: UseMutationOptions<QrSingleResponse, unknown, { ticketId: string }>,
+) {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...rest } = options ?? {};
+
+  return useMutation<QrSingleResponse, unknown, { ticketId: string }>({
+    mutationFn: async ({ ticketId }) =>
+      apiFetch<QrSingleResponse>(`/tickets/${ticketId}/qr`, {
+        method: 'POST',
+      }),
+    onSuccess: (data, variables, context) => {
+      void queryClient.invalidateQueries({ queryKey: ['guests', guestId, 'tickets'] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets', variables.ticketId, 'qr'] });
       onSuccess?.(data, variables, context);
     },
     ...rest,
