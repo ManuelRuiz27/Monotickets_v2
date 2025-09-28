@@ -9,7 +9,6 @@ use App\Models\Event;
 use App\Models\Qr;
 use App\Models\Ticket;
 use App\Models\User;
-use App\Support\ApiResponse;
 use App\Support\Audit\RecordsAuditLogs;
 use App\Support\Logging\StructuredLogging;
 use Carbon\CarbonImmutable;
@@ -54,7 +53,9 @@ class ScanController extends Controller
         $result = $this->handleScan($request, $authUser, $validated, false);
 
         if ($result === null) {
-            return ApiResponse::error('INVALID_QR', 'The QR code could not be resolved.', null, 404);
+            return response()->json([
+                'data' => $this->formatUnknownQrResponse((string) $validated['qr_code']),
+            ]);
         }
 
         return response()->json([
@@ -86,15 +87,9 @@ class ScanController extends Controller
             $payload = $this->handleScan($request, $authUser, $scan, true);
 
             if ($payload === null) {
-                $responses[] = [
+                $responses[] = array_merge([
                     'index' => $index,
-                    'result' => 'invalid',
-                    'reason' => 'qr_not_found',
-                    'message' => 'The QR code could not be resolved.',
-                    'qr_code' => (string) $scan['qr_code'],
-                    'ticket' => null,
-                    'attendance' => null,
-                ];
+                ], $this->formatUnknownQrResponse((string) $scan['qr_code']));
 
                 continue;
             }
@@ -466,6 +461,23 @@ class ScanController extends Controller
             'device_id' => $attendance->device_id,
             'offline' => $attendance->offline,
             'metadata' => $attendance->metadata_json,
+        ];
+    }
+
+    /**
+     * Build the response for scans where the QR code cannot be resolved.
+     *
+     * @return array<string, mixed>
+     */
+    private function formatUnknownQrResponse(string $qrCode): array
+    {
+        return [
+            'result' => 'invalid',
+            'reason' => 'qr_not_found',
+            'message' => 'The QR code could not be resolved.',
+            'qr_code' => $qrCode,
+            'ticket' => null,
+            'attendance' => null,
         ];
     }
 }

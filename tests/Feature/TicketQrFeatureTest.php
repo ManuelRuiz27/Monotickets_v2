@@ -127,6 +127,7 @@ class TicketQrFeatureTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('data.version', 5);
         $response->assertJsonPath('data.id', $qr->id);
+        $response->assertJsonPath('data.ticket_id', $ticket->id);
         $this->assertDatabaseHas('qrs', [
             'id' => $qr->id,
             'version' => 5,

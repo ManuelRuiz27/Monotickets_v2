@@ -130,6 +130,43 @@ class ScanFeatureTest extends TestCase
         $this->assertSame('scan_duplicate', $auditLog->action);
     }
 
+    public function test_store_allows_multiple_valid_scans_in_multiple_policy(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'organizer_user_id' => $organizer->id,
+            'status' => 'published',
+            'checkin_policy' => 'multiple',
+        ]);
+
+        [$ticket, $qr] = $this->createTicketWithQr($event);
+
+        $firstResponse = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => $qr->code,
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T09:00:00Z')->toIso8601String(),
+            'device_id' => 'device-multi-1',
+        ]);
+
+        $firstResponse->assertOk();
+        $firstResponse->assertJsonPath('data.result', 'valid');
+        $firstResponse->assertJsonPath('data.attendance.result', 'valid');
+
+        $secondResponse = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => $qr->code,
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T09:05:00Z')->toIso8601String(),
+            'device_id' => 'device-multi-2',
+        ]);
+
+        $secondResponse->assertOk();
+        $secondResponse->assertJsonPath('data.result', 'valid');
+        $secondResponse->assertJsonPath('data.attendance.result', 'valid');
+
+        $this->assertSame(2, Attendance::query()->where('ticket_id', $ticket->id)->where('result', 'valid')->count());
+    }
+
     public function test_store_returns_revoked_for_revoked_ticket(): void
     {
         $tenant = Tenant::factory()->create();
@@ -251,6 +288,33 @@ class ScanFeatureTest extends TestCase
 
         $this->assertNotNull($auditLog);
         $this->assertSame('scan_expired', $auditLog->action);
+    }
+
+    public function test_store_returns_invalid_when_qr_not_found(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'organizer_user_id' => $organizer->id,
+            'status' => 'published',
+            'checkin_policy' => 'single',
+        ]);
+
+        $this->createTicketWithQr($event);
+
+        $response = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => 'UNKNOWN-CODE',
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T10:00:00Z')->toIso8601String(),
+            'device_id' => 'device-unknown',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('data.result', 'invalid');
+        $response->assertJsonPath('data.reason', 'qr_not_found');
+        $this->assertNull($response->json('data.ticket'));
+        $this->assertNull($response->json('data.attendance'));
     }
 
     public function test_store_returns_invalid_when_qr_inactive(): void
