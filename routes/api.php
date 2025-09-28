@@ -9,6 +9,7 @@ use App\Http\Controllers\CheckpointController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\GuestController;
 use App\Http\Controllers\GuestListController;
+use App\Http\Controllers\TicketController;
 use App\Http\Controllers\VenueController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\EnsureTenantHeader;
@@ -99,5 +100,15 @@ Route::middleware('api')->group(function (): void {
             Route::get('{guest_id}', [GuestController::class, 'show'])->name('guests.show');
             Route::patch('{guest_id}', [GuestController::class, 'update'])->name('guests.update');
             Route::delete('{guest_id}', [GuestController::class, 'destroy'])->name('guests.destroy');
+            Route::get('{guest_id}/tickets', [TicketController::class, 'index'])->name('guests.tickets.index');
+            Route::post('{guest_id}/tickets', [TicketController::class, 'store'])->name('guests.tickets.store');
+        });
+
+    Route::middleware(['auth:api', 'role:superadmin,organizer'])
+        ->prefix('tickets')
+        ->group(function (): void {
+            Route::get('{ticket_id}', [TicketController::class, 'show'])->name('tickets.show');
+            Route::patch('{ticket_id}', [TicketController::class, 'update'])->name('tickets.update');
+            Route::delete('{ticket_id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
         });
 });
