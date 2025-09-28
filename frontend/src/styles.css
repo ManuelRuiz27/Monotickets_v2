@@ -103,7 +103,19 @@ button:disabled {
 .hostess-page {
   display: grid;
   gap: 2rem;
-  max-width: 800px;
+  max-width: 1200px;
+  align-items: start;
+}
+
+.hostess-content {
+  display: grid;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .hostess-page {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
 }
 
 .hostess-page header h1 {
@@ -117,6 +129,115 @@ button:disabled {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
   display: grid;
   gap: 1rem;
+}
+
+.hostess-totals {
+  background: white;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hostess-totals__content {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hostess-totals__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.hostess-totals__status {
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.hostess-totals__status--online {
+  background-color: rgba(22, 163, 74, 0.12);
+  color: #166534;
+}
+
+.hostess-totals__status--offline {
+  background-color: rgba(220, 38, 38, 0.12);
+  color: #991b1b;
+}
+
+.hostess-totals__status--connecting {
+  background-color: rgba(217, 119, 6, 0.12);
+  color: #92400e;
+}
+
+.hostess-totals__status--idle {
+  background-color: rgba(100, 116, 139, 0.12);
+  color: #334155;
+}
+
+.hostess-totals__latency {
+  display: grid;
+  gap: 0.25rem;
+  text-align: right;
+}
+
+.hostess-totals__latency span {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.hostess-totals__latency strong {
+  font-size: 1.25rem;
+}
+
+.hostess-totals__section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.hostess-totals__grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+}
+
+.hostess-totals__item {
+  background-color: #f8fafc;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.hostess-totals__item span {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.hostess-totals__item strong {
+  font-size: 1.25rem;
+}
+
+.hostess-totals__item--valid {
+  border-left: 4px solid #16a34a;
+}
+
+.hostess-totals__item--duplicate {
+  border-left: 4px solid #d97706;
+}
+
+.hostess-totals__item--invalid {
+  border-left: 4px solid #dc2626;
+}
+
+.hostess-totals__empty {
+  margin: 0;
+  color: #64748b;
 }
 
 .device-card {
