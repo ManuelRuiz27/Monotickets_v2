@@ -9,6 +9,7 @@ use App\Models\Guest;
 use App\Models\GuestList;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use DateTimeZone;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -26,8 +27,14 @@ class AnalyticsService
      */
     public function attendanceByHour(string $eventId, DateTimeInterface|string|null $from = null, DateTimeInterface|string|null $to = null): array
     {
-        $fromHour = $this->normaliseDateBoundary($from)?->startOfHour();
-        $toHour = $this->normaliseDateBoundary($to)?->startOfHour();
+        $timezone = $this->resolveTimezone(
+            Event::query()
+                ->whereKey($eventId)
+                ->value('timezone')
+        );
+
+        $fromHour = $this->normaliseDateBoundary($timezone, $from, true)?->startOfHour();
+        $toHour = $this->normaliseDateBoundary($timezone, $to, false)?->startOfHour();
 
         $query = ActivityMetric::query()
             ->where('event_id', $eventId)
@@ -65,8 +72,15 @@ class AnalyticsService
      */
     public function overview(string $eventId, DateTimeInterface|string|null $from = null, DateTimeInterface|string|null $to = null): array
     {
-        $fromBoundary = $this->normaliseDateBoundary($from);
-        $toBoundary = $this->normaliseDateBoundary($to);
+        $event = Event::query()
+            ->select('id', 'capacity', 'timezone')
+            ->whereKey($eventId)
+            ->first();
+
+        $timezone = $this->resolveTimezone($event?->timezone);
+
+        $fromBoundary = $this->normaliseDateBoundary($timezone, $from, true);
+        $toBoundary = $this->normaliseDateBoundary($timezone, $to, false);
 
         $invited = Guest::query()
             ->where('event_id', $eventId)
@@ -97,18 +111,17 @@ class AnalyticsService
             ->count();
 
         $uniqueAttendees = (int) ((clone $validQuery)
-            ->select(DB::raw('count(distinct coalesce(guest_id, ticket_id)) as aggregate'))
+            ->whereNotNull('guest_id')
+            ->select(DB::raw('count(distinct guest_id) as aggregate'))
             ->value('aggregate') ?? 0);
 
-        $capacity = Event::query()
-            ->whereKey($eventId)
-            ->value('capacity');
+        $capacity = $event?->capacity;
 
         $occupancyRate = null;
 
         if ($capacity !== null && (int) $capacity > 0) {
             $capacity = (int) $capacity;
-            $occupancyRate = min(100, ($capacity > 0 ? ($uniqueAttendees / $capacity) * 100 : 0));
+            $occupancyRate = $uniqueAttendees / $capacity;
         }
 
         return [
@@ -158,8 +171,14 @@ class AnalyticsService
      */
     public function checkpointTotals(string $eventId, DateTimeInterface|string|null $from = null, DateTimeInterface|string|null $to = null): array
     {
-        $fromBoundary = $this->normaliseDateBoundary($from);
-        $toBoundary = $this->normaliseDateBoundary($to);
+        $timezone = $this->resolveTimezone(
+            Event::query()
+                ->whereKey($eventId)
+                ->value('timezone')
+        );
+
+        $fromBoundary = $this->normaliseDateBoundary($timezone, $from, true);
+        $toBoundary = $this->normaliseDateBoundary($timezone, $to, false);
 
         $query = Attendance::query()
             ->select('checkpoint_id', 'result', DB::raw('count(*) as aggregate'))
@@ -285,14 +304,45 @@ class AnalyticsService
     /**
      * @param  DateTimeInterface|string|null  $value
      */
-    private function normaliseDateBoundary(DateTimeInterface|string|null $value): ?CarbonImmutable
+    private function normaliseDateBoundary(string $timezone, DateTimeInterface|string|null $value, bool $isStart): ?CarbonImmutable
     {
         if ($value === null) {
             return null;
         }
 
-        $date = CarbonImmutable::make($value);
+        if ($timezone === '') {
+            $timezone = 'UTC';
+        }
 
-        return $date?->utc();
+        $date = is_string($value)
+            ? CarbonImmutable::parse($value, $timezone)
+            : CarbonImmutable::make($value);
+
+        if ($date === null) {
+            return null;
+        }
+
+        $date = $date->setTimezone($timezone);
+
+        $date = $isStart
+            ? $date->startOfMinute()
+            : $date->endOfMinute();
+
+        return $date->setTimezone('UTC');
+    }
+
+    private function resolveTimezone(?string $timezone): string
+    {
+        if ($timezone === null || $timezone === '') {
+            return 'UTC';
+        }
+
+        try {
+            new DateTimeZone($timezone);
+
+            return $timezone;
+        } catch (\Exception $exception) {
+            return 'UTC';
+        }
     }
 }
