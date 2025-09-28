@@ -44,4 +44,22 @@ trait CreatesUsers
 
         return $user->fresh();
     }
+
+    /**
+     * Create a hostess bound to the provided tenant.
+     */
+    protected function createHostess(?Tenant $tenant = null): User
+    {
+        $tenant ??= Tenant::factory()->create();
+
+        $role = Role::factory()->create([
+            'code' => 'hostess',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $user = User::factory()->create(['tenant_id' => $tenant->id]);
+        $user->roles()->attach($role->id, ['tenant_id' => $tenant->id]);
+
+        return $user->fresh();
+    }
 }
