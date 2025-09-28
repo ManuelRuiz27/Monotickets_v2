@@ -17,6 +17,7 @@ import { DateTime } from 'luxon';
 import { useNavigate } from 'react-router-dom';
 import { CHECKIN_POLICY_LABELS, type CheckinPolicy, useEvent } from '../../hooks/useEventsApi';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
+import EventGuestsTab from './EventGuestsTab';
 import EventVenuesTab from './EventVenuesTab';
 import EventStatusChip from './EventStatusChip';
 
@@ -24,7 +25,7 @@ interface EventDetailProps {
   eventId: string;
 }
 
-type TabValue = 'summary' | 'venues';
+type TabValue = 'summary' | 'venues' | 'guests';
 
 const formatDateTime = (iso: string | null | undefined, timezone: string) => {
   if (!iso) return '—';
@@ -196,7 +197,7 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
               {statusChip}
             </Box>
             <Typography variant="body2" color="text.secondary">
-              Consulta los detalles del evento y administra los venues asociados.
+              Consulta los detalles del evento y administra los invitados y venues asociados.
             </Typography>
           </Stack>
           <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate('/events')}>
@@ -211,10 +212,13 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
             allowScrollButtonsMobile
           >
             <Tab label="Resumen" value="summary" />
+            <Tab label="Invitados" value="guests" />
             <Tab label="Venues" value="venues" />
           </Tabs>
           <Box sx={{ p: { xs: 2, md: 3 } }}>
-            {tab === 'summary' ? summaryContent() : <EventVenuesTab eventId={eventId} />}
+            {tab === 'summary' && summaryContent()}
+            {tab === 'guests' && <EventGuestsTab eventId={eventId} />}
+            {tab === 'venues' && <EventVenuesTab eventId={eventId} />}
           </Box>
         </Paper>
       </Stack>
