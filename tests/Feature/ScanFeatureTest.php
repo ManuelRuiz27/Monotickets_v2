@@ -170,6 +170,48 @@ class ScanFeatureTest extends TestCase
         $this->assertSame('scan_revoked', $auditLog->action);
     }
 
+    public function test_scan_returns_revoked_after_ticket_status_update(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'organizer_user_id' => $organizer->id,
+            'status' => 'published',
+            'checkin_policy' => 'single',
+        ]);
+
+        [$ticket, $qr] = $this->createTicketWithQr($event);
+
+        $updateResponse = $this->actingAs($organizer, 'api')->patchJson(
+            sprintf('/tickets/%s', $ticket->id),
+            ['status' => 'revoked']
+        );
+
+        $updateResponse->assertOk();
+        $updateResponse->assertJsonPath('data.status', 'revoked');
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'status' => 'revoked',
+        ]);
+
+        $scanResponse = $this->actingAs($hostess, 'api')->postJson('/scan', [
+            'qr_code' => $qr->code,
+            'scanned_at' => CarbonImmutable::parse('2024-07-01T12:00:00Z')->toIso8601String(),
+        ]);
+
+        $scanResponse->assertOk();
+        $scanResponse->assertJsonPath('data.result', 'revoked');
+        $scanResponse->assertJsonPath('data.attendance.result', 'revoked');
+
+        $this->assertDatabaseHas('attendances', [
+            'ticket_id' => $ticket->id,
+            'result' => 'revoked',
+        ]);
+    }
+
     public function test_store_returns_expired_when_ticket_past_expiration(): void
     {
         $tenant = Tenant::factory()->create();

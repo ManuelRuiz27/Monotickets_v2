@@ -14,6 +14,7 @@ use App\Support\ApiResponse;
 use App\Support\Audit\RecordsAuditLogs;
 use App\Support\Logging\StructuredLogging;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use function event;
@@ -71,9 +72,15 @@ class TicketController extends Controller
         $limit = 1 + ($guest->allow_plus_ones ? (int) ($guest->plus_ones_limit ?? 0) : 0);
 
         if ($activeTickets >= $limit) {
-            $this->throwValidationException([
-                'guest_id' => ['The guest has reached the ticket issuing limit.'],
-            ]);
+            return ApiResponse::error(
+                'TICKET_LIMIT_REACHED',
+                'The guest has reached the ticket issuing limit.',
+                [
+                    'guest_id' => (string) $guest->id,
+                    'limit' => $limit,
+                ],
+                409
+            );
         }
 
         $validated = $request->validated();
@@ -423,9 +430,16 @@ class TicketController extends Controller
         }
 
         if ($query->exists()) {
-            $this->throwValidationException([
-                'seat_code' => ['The selected seat is already assigned to another ticket.'],
-            ]);
+            throw new HttpResponseException(ApiResponse::error(
+                'SEAT_CONFLICT',
+                'The selected seat is already assigned to another ticket.',
+                [
+                    'seat_section' => $seatData['seat_section'],
+                    'seat_row' => $seatData['seat_row'],
+                    'seat_code' => $seatData['seat_code'],
+                ],
+                409
+            ));
         }
     }
 
