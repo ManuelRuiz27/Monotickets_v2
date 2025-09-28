@@ -201,7 +201,7 @@ class EventReportController extends Controller
         }
 
         $occupancy = $overview['occupancy_rate'] !== null
-            ? number_format((float) $overview['occupancy_rate'], 2) . '%'
+            ? number_format((float) $overview['occupancy_rate'] * 100, 2) . '%'
             : 'N/A';
 
         ob_start();
