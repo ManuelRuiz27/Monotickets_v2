@@ -66,7 +66,9 @@ Route::middleware('api')->group(function (): void {
         ->prefix('users')
         ->group(function (): void {
             Route::get('/', [UserController::class, 'index'])->name('users.index');
-            Route::post('/', [UserController::class, 'store'])->name('users.store');
+            Route::post('/', [UserController::class, 'store'])
+                ->middleware('limits:user.create')
+                ->name('users.store');
             Route::get('{user}', [UserController::class, 'show'])->name('users.show');
             Route::patch('{user}', [UserController::class, 'update'])->name('users.update');
             Route::delete('{user}', [UserController::class, 'destroy'])->name('users.destroy');
@@ -83,7 +85,9 @@ Route::middleware('api')->group(function (): void {
         ->prefix('events')
         ->group(function (): void {
             Route::get('/', [EventController::class, 'index'])->name('events.index');
-            Route::post('/', [EventController::class, 'store'])->name('events.store');
+            Route::post('/', [EventController::class, 'store'])
+                ->middleware('limits:event.create')
+                ->name('events.store');
             Route::get('{eventId}', [EventController::class, 'show'])->name('events.show');
             Route::patch('{eventId}', [EventController::class, 'update'])->name('events.update');
             Route::delete('{eventId}', [EventController::class, 'destroy'])->name('events.destroy');
@@ -104,10 +108,10 @@ Route::middleware('api')->group(function (): void {
 
             Route::prefix('{event_id}/reports')->group(function (): void {
                 Route::get('attendance.csv', [EventReportController::class, 'attendanceCsv'])
-                    ->middleware('throttle:reports-export')
+                    ->middleware(['throttle:reports-export', 'limits:export,csv'])
                     ->name('events.reports.attendance');
                 Route::get('summary.pdf', [EventReportController::class, 'summaryPdf'])
-                    ->middleware('throttle:reports-export')
+                    ->middleware(['throttle:reports-export', 'limits:export,pdf'])
                     ->name('events.reports.summary');
             });
 
@@ -191,7 +195,7 @@ Route::middleware('api')->group(function (): void {
         Route::post('devices/register', [DeviceController::class, 'register'])->name('devices.register');
         Route::get('me/assignments', [HostessAssignmentMeController::class, 'index'])->name('me.assignments.index');
         Route::post('scan', [ScanController::class, 'store'])
-            ->middleware('throttle:scan-device')
+            ->middleware(['throttle:scan-device', 'limits:scan.record'])
             ->name('scan.store');
         Route::post('scan/batch', [ScanController::class, 'batch'])->name('scan.batch');
     });

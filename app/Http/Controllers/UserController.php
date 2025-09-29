@@ -153,10 +153,6 @@ class UserController extends Controller
 
         $isActive = array_key_exists('is_active', $validated) ? (bool) $validated['is_active'] : true;
 
-        if ($isActive) {
-            $this->limitsService->assertCan($tenant, LimitsService::ACTION_CREATE_USER);
-        }
-
         $user = DB::transaction(function () use ($validated, $tenantId, $roles, $isActive, $authUser, $request) {
             $user = User::create([
                 'tenant_id' => $tenantId,

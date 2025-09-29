@@ -136,10 +136,6 @@ class EventController extends Controller
             ]);
         }
 
-        if ($validated['status'] !== 'archived') {
-            $this->limitsService->assertCan($tenant, LimitsService::ACTION_CREATE_EVENT);
-        }
-
         $this->assertUniqueEventCode($tenantId, $validated['code']);
 
         $startAt = CarbonImmutable::parse($validated['start_at']);
