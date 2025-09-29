@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 
 class Tenant extends Model
 {
@@ -74,5 +75,35 @@ class Tenant extends Model
             ->with('plan')
             ->orderByDesc('current_period_end')
             ->first();
+    }
+
+    /**
+     * Accessor for the tenant branding settings.
+     *
+     * @return array{logo_url: ?string, colors: array{primary: ?string, accent: ?string, bg: ?string, text: ?string}, email_from: ?string, email_reply_to: ?string}
+     */
+    public function branding(): array
+    {
+        $settings = $this->settings_json;
+
+        $branding = is_array($settings) ? Arr::get($settings, 'branding', []) : [];
+        $colors = is_array($branding) ? Arr::get($branding, 'colors', []) : [];
+
+        return [
+            'logo_url' => $this->stringOrNull(Arr::get($branding, 'logo_url')),
+            'colors' => [
+                'primary' => $this->stringOrNull(Arr::get($colors, 'primary')),
+                'accent' => $this->stringOrNull(Arr::get($colors, 'accent')),
+                'bg' => $this->stringOrNull(Arr::get($colors, 'bg')),
+                'text' => $this->stringOrNull(Arr::get($colors, 'text')),
+            ],
+            'email_from' => $this->stringOrNull(Arr::get($branding, 'email_from')),
+            'email_reply_to' => $this->stringOrNull(Arr::get($branding, 'email_reply_to')),
+        ];
+    }
+
+    private function stringOrNull(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

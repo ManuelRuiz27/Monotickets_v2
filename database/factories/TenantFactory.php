@@ -27,6 +27,17 @@ class TenantFactory extends Factory
             'plan' => $this->faker->randomElement(['free', 'basic', 'pro']),
             'settings_json' => [
                 'timezone' => $this->faker->timezone(),
+                'branding' => [
+                    'logo_url' => $this->faker->imageUrl(),
+                    'colors' => [
+                        'primary' => sprintf('#%06X', $this->faker->numberBetween(0, 0xFFFFFF)),
+                        'accent' => sprintf('#%06X', $this->faker->numberBetween(0, 0xFFFFFF)),
+                        'bg' => sprintf('#%06X', $this->faker->numberBetween(0, 0xFFFFFF)),
+                        'text' => sprintf('#%06X', $this->faker->numberBetween(0, 0xFFFFFF)),
+                    ],
+                    'email_from' => $this->faker->companyEmail(),
+                    'email_reply_to' => $this->faker->companyEmail(),
+                ],
             ],
         ];
     }
