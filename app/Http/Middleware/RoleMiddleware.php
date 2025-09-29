@@ -19,7 +19,7 @@ class RoleMiddleware
     /**
      * Allowed application roles.
      */
-    private const ALLOWED_ROLES = ['superadmin', 'organizer', 'hostess'];
+    private const ALLOWED_ROLES = ['superadmin', 'organizer', 'hostess', 'tenant_owner'];
 
     public function __construct(private readonly TenantContext $tenantContext)
     {
