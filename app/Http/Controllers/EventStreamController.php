@@ -26,8 +26,9 @@ class EventStreamController extends Controller
     /**
      * Emit attendance summaries for an event over Server-Sent Events.
      */
-    public function stream(Request $request, string $eventId): StreamedResponse
+    public function stream(Request $request, string $event_id): StreamedResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -277,8 +278,9 @@ class EventStreamController extends Controller
     /**
      * Locate the event ensuring tenant access constraints.
      */
-    private function locateEvent(Request $request, User $authUser, string $eventId): ?Event
+    private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
+        $eventId = $event_id;
         $query = Event::query()->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

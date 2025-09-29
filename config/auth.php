@@ -30,4 +30,6 @@ return [
     ],
 
     'password_timeout' => 10800,
+
+    'password_reset_expiration_minutes' => (int) env('PASSWORD_RESET_EXPIRATION_MINUTES', 60),
 ];

@@ -25,8 +25,9 @@ class EventAttendanceController extends Controller
     /**
      * Return attendances captured for an event after the provided cursor.
      */
-    public function attendancesSince(Request $request, string $eventId): JsonResponse
+    public function attendancesSince(Request $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -82,8 +83,10 @@ class EventAttendanceController extends Controller
     /**
      * Retrieve the current state of a ticket for the provided event.
      */
-    public function ticketState(Request $request, string $eventId, string $ticketId): JsonResponse
+    public function ticketState(Request $request, string $event_id, string $ticket_id): JsonResponse
     {
+        $eventId = $event_id;
+        $ticketId = $ticket_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -121,8 +124,9 @@ class EventAttendanceController extends Controller
     /**
      * Locate an event ensuring tenant constraints.
      */
-    private function locateEvent(Request $request, User $authUser, string $eventId): ?Event
+    private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
+        $eventId = $event_id;
         $query = Event::query()->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

@@ -26,7 +26,7 @@ abstract class GuestRequest extends ApiFormRequest
             $this->resolvedEventId = $routeEventId;
         }
 
-        $routeGuestId = $this->route('guest_id') ?? $this->route('guestId');
+        $routeGuestId = $this->route('guest_id');
 
         if (is_string($routeGuestId) && $routeGuestId !== '') {
             $this->routeGuestId = $routeGuestId;

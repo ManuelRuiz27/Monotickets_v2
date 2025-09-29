@@ -29,8 +29,10 @@ class CheckpointController extends Controller
     /**
      * Display a paginated listing of checkpoints for the venue.
      */
-    public function index(CheckpointIndexRequest $request, string $eventId, string $venueId): JsonResponse
+    public function index(CheckpointIndexRequest $request, string $event_id, string $venue_id): JsonResponse
     {
+        $eventId = $event_id;
+        $venueId = $venue_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -68,8 +70,10 @@ class CheckpointController extends Controller
     /**
      * Store a newly created checkpoint for the venue.
      */
-    public function store(CheckpointStoreRequest $request, string $eventId, string $venueId): JsonResponse
+    public function store(CheckpointStoreRequest $request, string $event_id, string $venue_id): JsonResponse
     {
+        $eventId = $event_id;
+        $venueId = $venue_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -134,8 +138,11 @@ class CheckpointController extends Controller
     /**
      * Display the specified checkpoint.
      */
-    public function show(Request $request, string $eventId, string $venueId, string $checkpointId): JsonResponse
+    public function show(Request $request, string $event_id, string $venue_id, string $checkpoint_id): JsonResponse
     {
+        $eventId = $event_id;
+        $venueId = $venue_id;
+        $checkpointId = $checkpoint_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -164,8 +171,11 @@ class CheckpointController extends Controller
     /**
      * Update the specified checkpoint.
      */
-    public function update(CheckpointUpdateRequest $request, string $eventId, string $venueId, string $checkpointId): JsonResponse
+    public function update(CheckpointUpdateRequest $request, string $event_id, string $venue_id, string $checkpoint_id): JsonResponse
     {
+        $eventId = $event_id;
+        $venueId = $venue_id;
+        $checkpointId = $checkpoint_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -227,8 +237,11 @@ class CheckpointController extends Controller
     /**
      * Remove the specified checkpoint from storage.
      */
-    public function destroy(Request $request, string $eventId, string $venueId, string $checkpointId): JsonResponse
+    public function destroy(Request $request, string $event_id, string $venue_id, string $checkpoint_id): JsonResponse
     {
+        $eventId = $event_id;
+        $venueId = $venue_id;
+        $checkpointId = $checkpoint_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -277,8 +290,9 @@ class CheckpointController extends Controller
     /**
      * Locate an event constrained by tenant access rules.
      */
-    private function locateEvent(Request $request, User $authUser, string $eventId): ?Event
+    private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
+        $eventId = $event_id;
         $query = Event::query()->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

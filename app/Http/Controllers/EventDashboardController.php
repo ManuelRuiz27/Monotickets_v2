@@ -21,8 +21,9 @@ class EventDashboardController extends Controller
     /**
      * Return the main overview metrics for the dashboard.
      */
-    public function overview(Request $request, SnapshotService $snapshots, string $eventId): JsonResponse
+    public function overview(Request $request, SnapshotService $snapshots, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         $authUser = $request->user();
         $event = $this->findEventForRequest($request, $authUser, $eventId);
 
@@ -47,8 +48,9 @@ class EventDashboardController extends Controller
     /**
      * Return attendance metrics grouped by hour.
      */
-    public function attendanceByHour(Request $request, SnapshotService $snapshots, string $eventId): JsonResponse
+    public function attendanceByHour(Request $request, SnapshotService $snapshots, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         $authUser = $request->user();
         $event = $this->findEventForRequest($request, $authUser, $eventId);
 
@@ -83,8 +85,9 @@ class EventDashboardController extends Controller
     /**
      * Return checkpoint totals for the dashboard.
      */
-    public function checkpointTotals(Request $request, SnapshotService $snapshots, string $eventId): JsonResponse
+    public function checkpointTotals(Request $request, SnapshotService $snapshots, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         $authUser = $request->user();
         $event = $this->findEventForRequest($request, $authUser, $eventId);
 
@@ -137,8 +140,9 @@ class EventDashboardController extends Controller
     /**
      * Return RSVP funnel totals for the dashboard.
      */
-    public function rsvpFunnel(Request $request, SnapshotService $snapshots, string $eventId): JsonResponse
+    public function rsvpFunnel(Request $request, SnapshotService $snapshots, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         $authUser = $request->user();
         $event = $this->findEventForRequest($request, $authUser, $eventId);
 
@@ -156,8 +160,9 @@ class EventDashboardController extends Controller
     /**
      * Return guests grouped by list for the dashboard.
      */
-    public function guestsByList(Request $request, SnapshotService $snapshots, string $eventId): JsonResponse
+    public function guestsByList(Request $request, SnapshotService $snapshots, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         $authUser = $request->user();
         $event = $this->findEventForRequest($request, $authUser, $eventId);
 

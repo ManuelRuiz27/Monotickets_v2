@@ -14,7 +14,7 @@ class EventUpdateRequest extends EventRequest
      */
     public function rules(): array
     {
-        $eventId = (string) $this->route('eventId');
+        $eventId = (string) $this->route('event_id');
 
         return $this->eventRules(true, $eventId !== '' ? $eventId : null);
     }

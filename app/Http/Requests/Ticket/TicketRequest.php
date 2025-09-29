@@ -20,7 +20,7 @@ abstract class TicketRequest extends ApiFormRequest
      */
     protected function prepareForValidation(): void
     {
-        $routeTicketId = $this->route('ticket_id') ?? $this->route('ticketId');
+        $routeTicketId = $this->route('ticket_id');
 
         if (is_string($routeTicketId) && $routeTicketId !== '') {
             $this->routeTicketId = $routeTicketId;

@@ -35,8 +35,9 @@ class QrController extends Controller
     /**
      * Retrieve the QR code for the specified ticket.
      */
-    public function show(Request $request, string $ticketId): JsonResponse
+    public function show(Request $request, string $ticket_id): JsonResponse
     {
+        $ticketId = $ticket_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $ticket = $this->locateTicket($request, $authUser, $ticketId);
@@ -59,8 +60,9 @@ class QrController extends Controller
     /**
      * Create or rotate the QR code for the specified ticket.
      */
-    public function store(Request $request, string $ticketId): JsonResponse
+    public function store(Request $request, string $ticket_id): JsonResponse
     {
+        $ticketId = $ticket_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $ticket = $this->locateTicket($request, $authUser, $ticketId);
@@ -129,8 +131,9 @@ class QrController extends Controller
     /**
      * Locate a ticket ensuring tenant constraints.
      */
-    private function locateTicket(Request $request, User $authUser, string $ticketId): ?Ticket
+    private function locateTicket(Request $request, User $authUser, string $ticket_id): ?Ticket
     {
+        $ticketId = $ticket_id;
         $query = Ticket::query()->with(['event', 'guest', 'qr'])->whereKey($ticketId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

@@ -199,8 +199,9 @@ class EventController extends Controller
     /**
      * Display the specified event.
      */
-    public function show(Request $request, string $eventId): JsonResponse
+    public function show(Request $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -217,8 +218,9 @@ class EventController extends Controller
     /**
      * Update the specified event in storage.
      */
-    public function update(EventUpdateRequest $request, string $eventId): JsonResponse
+    public function update(EventUpdateRequest $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -331,8 +333,9 @@ class EventController extends Controller
     /**
      * Soft delete the specified event from storage.
      */
-    public function destroy(Request $request, string $eventId): JsonResponse
+    public function destroy(Request $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -433,8 +436,9 @@ class EventController extends Controller
     /**
      * Locate an event for the current tenant context.
      */
-    private function locateEvent(Request $request, User $authUser, string $eventId): ?Event
+    private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
+        $eventId = $event_id;
         $query = Event::query()->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

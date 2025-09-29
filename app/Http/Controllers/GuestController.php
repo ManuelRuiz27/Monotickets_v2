@@ -31,8 +31,9 @@ class GuestController extends Controller
     /**
      * Display a paginated listing of guests for an event.
      */
-    public function index(GuestIndexRequest $request, string $eventId): JsonResponse
+    public function index(GuestIndexRequest $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -85,8 +86,9 @@ class GuestController extends Controller
     /**
      * Store a newly created guest for the event.
      */
-    public function store(GuestStoreRequest $request, string $eventId): JsonResponse
+    public function store(GuestStoreRequest $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -148,8 +150,9 @@ class GuestController extends Controller
     /**
      * Display the specified guest.
      */
-    public function show(Request $request, string $guestId): JsonResponse
+    public function show(Request $request, string $guest_id): JsonResponse
     {
+        $guestId = $guest_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $guest = $this->locateGuest($request, $authUser, $guestId);
@@ -166,8 +169,9 @@ class GuestController extends Controller
     /**
      * Update the specified guest.
      */
-    public function update(GuestUpdateRequest $request, string $guestId): JsonResponse
+    public function update(GuestUpdateRequest $request, string $guest_id): JsonResponse
     {
+        $guestId = $guest_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $guest = $this->locateGuest($request, $authUser, $guestId);
@@ -221,8 +225,9 @@ class GuestController extends Controller
     /**
      * Soft delete the specified guest.
      */
-    public function destroy(Request $request, string $guestId): JsonResponse
+    public function destroy(Request $request, string $guest_id): JsonResponse
     {
+        $guestId = $guest_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $guest = $this->locateGuest($request, $authUser, $guestId);
@@ -260,8 +265,9 @@ class GuestController extends Controller
     /**
      * Locate an event ensuring tenant constraints.
      */
-    private function locateEvent(Request $request, User $authUser, string $eventId): ?Event
+    private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
+        $eventId = $event_id;
         $query = Event::query()->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 
@@ -285,8 +291,9 @@ class GuestController extends Controller
     /**
      * Locate a guest ensuring tenant constraints.
      */
-    private function locateGuest(Request $request, User $authUser, string $guestId): ?Guest
+    private function locateGuest(Request $request, User $authUser, string $guest_id): ?Guest
     {
+        $guestId = $guest_id;
         $query = Guest::query()->with('event')->whereKey($guestId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

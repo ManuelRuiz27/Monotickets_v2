@@ -57,8 +57,9 @@ class BillingController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $invoiceId): JsonResponse
+    public function show(Request $request, string $invoice_id): JsonResponse
     {
+        $invoiceId = $invoice_id;
         [$invoice] = $this->resolveInvoice($request, $invoiceId);
 
         if ($invoice === null) {
@@ -70,8 +71,9 @@ class BillingController extends Controller
         ]);
     }
 
-    public function downloadPdf(Request $request, string $invoiceId)
+    public function downloadPdf(Request $request, string $invoice_id)
     {
+        $invoiceId = $invoice_id;
         [$invoice, $tenantId] = $this->resolveInvoice($request, $invoiceId, ['payments', 'tenant.latestSubscription.plan']);
 
         if ($invoice === null) {
@@ -237,8 +239,9 @@ class BillingController extends Controller
         ], $created ? Response::HTTP_CREATED : Response::HTTP_OK);
     }
 
-    public function pay(Request $request, string $invoiceId): JsonResponse
+    public function pay(Request $request, string $invoice_id): JsonResponse
     {
+        $invoiceId = $invoice_id;
         [$invoice, $tenantId, $user] = $this->resolveInvoice($request, $invoiceId);
 
         if ($invoice === null) {
@@ -312,8 +315,9 @@ class BillingController extends Controller
      * @param array<int, string> $with
      * @return array{0: ?Invoice, 1: ?string, 2: User}
      */
-    private function resolveInvoice(Request $request, string $invoiceId, array $with = ['payments']): array
+    private function resolveInvoice(Request $request, string $invoice_id, array $with = ['payments']): array
     {
+        $invoiceId = $invoice_id;
         $user = $request->user();
         $tenantId = $this->resolveTenantContext($request, $user);
 

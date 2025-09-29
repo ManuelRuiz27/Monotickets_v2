@@ -125,8 +125,9 @@ class HostessAssignmentController extends Controller
     /**
      * Display the specified hostess assignment.
      */
-    public function show(Request $request, string $assignmentId): JsonResponse
+    public function show(Request $request, string $assignment_id): JsonResponse
     {
+        $assignmentId = $assignment_id;
         $assignment = $this->findAssignment($assignmentId);
 
         if ($assignment === null) {
@@ -145,8 +146,9 @@ class HostessAssignmentController extends Controller
     /**
      * Update the specified hostess assignment.
      */
-    public function update(HostessAssignmentUpdateRequest $request, string $assignmentId): JsonResponse
+    public function update(HostessAssignmentUpdateRequest $request, string $assignment_id): JsonResponse
     {
+        $assignmentId = $assignment_id;
         $assignment = $this->findAssignment($assignmentId);
 
         if ($assignment === null) {
@@ -222,8 +224,9 @@ class HostessAssignmentController extends Controller
     /**
      * Remove the specified hostess assignment.
      */
-    public function destroy(Request $request, string $assignmentId): JsonResponse
+    public function destroy(Request $request, string $assignment_id): JsonResponse
     {
+        $assignmentId = $assignment_id;
         $assignment = $this->findAssignment($assignmentId);
 
         if ($assignment === null) {
