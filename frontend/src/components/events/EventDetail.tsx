@@ -19,6 +19,7 @@ import { CHECKIN_POLICY_LABELS, type CheckinPolicy, useEvent } from '../../hooks
 import { extractApiErrorMessage } from '../../utils/apiErrors';
 import EventGuestsTab from './EventGuestsTab';
 import EventVenuesTab from './EventVenuesTab';
+import EventDashboardTab from './EventDashboardTab';
 import EventStatusChip from './EventStatusChip';
 import ScanSimulator from '../scans/ScanSimulator';
 
@@ -26,7 +27,7 @@ interface EventDetailProps {
   eventId: string;
 }
 
-type TabValue = 'summary' | 'venues' | 'guests';
+type TabValue = 'summary' | 'venues' | 'guests' | 'dashboard';
 
 const formatDateTime = (iso: string | null | undefined, timezone: string) => {
   if (!iso) return '—';
@@ -215,11 +216,13 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
             allowScrollButtonsMobile
           >
             <Tab label="Resumen" value="summary" />
+            <Tab label="Dashboard" value="dashboard" />
             <Tab label="Invitados" value="guests" />
             <Tab label="Venues" value="venues" />
           </Tabs>
           <Box sx={{ p: { xs: 2, md: 3 } }}>
             {tab === 'summary' && summaryContent()}
+            {tab === 'dashboard' && <EventDashboardTab eventId={eventId} />}
             {tab === 'guests' && <EventGuestsTab eventId={eventId} />}
             {tab === 'venues' && <EventVenuesTab eventId={eventId} />}
           </Box>
