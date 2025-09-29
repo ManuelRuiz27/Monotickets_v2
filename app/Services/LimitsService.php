@@ -35,7 +35,7 @@ class LimitsService
             return;
         }
 
-        $limits = $plan->limits_json ?? [];
+        $limits = $tenant->effectiveLimits($plan);
 
         switch ($action) {
             case self::ACTION_CREATE_EVENT:

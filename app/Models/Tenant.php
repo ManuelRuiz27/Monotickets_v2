@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Plan;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Arr;
 
 class Tenant extends Model
@@ -66,6 +68,14 @@ class Tenant extends Model
     }
 
     /**
+     * The latest subscription associated with the tenant.
+     */
+    public function latestSubscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class)->latestOfMany('current_period_end');
+    }
+
+    /**
      * Retrieve the most recent active subscription for the tenant.
      */
     public function activeSubscription(): ?Subscription
@@ -100,6 +110,52 @@ class Tenant extends Model
             'email_from' => $this->stringOrNull(Arr::get($branding, 'email_from')),
             'email_reply_to' => $this->stringOrNull(Arr::get($branding, 'email_reply_to')),
         ];
+    }
+
+    /**
+     * Retrieve the limit overrides configured for the tenant.
+     *
+     * @return array<string, int|null>
+     */
+    public function limitOverrides(): array
+    {
+        $settings = $this->settings_json;
+
+        $overrides = is_array($settings) ? Arr::get($settings, 'limits_override', []) : [];
+
+        if (! is_array($overrides)) {
+            return [];
+        }
+
+        ksort($overrides);
+
+        return array_map(static function ($value) {
+            if ($value === null) {
+                return null;
+            }
+
+            return (int) $value;
+        }, $overrides);
+    }
+
+    /**
+     * Merge plan limits with tenant-specific overrides.
+     *
+     * @return array<string, mixed>
+     */
+    public function effectiveLimits(?Plan $plan = null): array
+    {
+        $planLimits = $plan?->limits_json ?? [];
+
+        if (! is_array($planLimits)) {
+            $planLimits = [];
+        }
+
+        foreach ($this->limitOverrides() as $key => $value) {
+            $planLimits[$key] = $value;
+        }
+
+        return $planLimits;
     }
 
     private function stringOrNull(mixed $value): ?string

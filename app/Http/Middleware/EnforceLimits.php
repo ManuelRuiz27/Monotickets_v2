@@ -54,7 +54,7 @@ class EnforceLimits
             return $next($request);
         }
 
-        $limit = $this->extractLimit($plan, 'max_events');
+        $limit = $this->extractLimit($tenant, $plan, 'max_events');
 
         if ($limit === null) {
             return $next($request);
@@ -95,7 +95,7 @@ class EnforceLimits
             return $next($request);
         }
 
-        $limit = $this->extractLimit($plan, 'max_users');
+        $limit = $this->extractLimit($tenant, $plan, 'max_users');
 
         if ($limit === null) {
             return $next($request);
@@ -132,7 +132,7 @@ class EnforceLimits
             return $next($request);
         }
 
-        $limit = $this->extractLimit($plan, 'max_scans_per_event');
+        $limit = $this->extractLimit($tenant, $plan, 'max_scans_per_event');
 
         if ($limit === null) {
             return $next($request);
@@ -314,9 +314,9 @@ class EnforceLimits
         return (bool) $value;
     }
 
-    private function extractLimit(Plan $plan, string $key): ?int
+    private function extractLimit(Tenant $tenant, Plan $plan, string $key): ?int
     {
-        $limits = $plan->limits_json ?? [];
+        $limits = $tenant->effectiveLimits($plan);
 
         if (! is_array($limits) || ! array_key_exists($key, $limits) || $limits[$key] === null) {
             return null;
