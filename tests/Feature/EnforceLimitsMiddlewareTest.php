@@ -214,6 +214,156 @@ class EnforceLimitsMiddlewareTest extends TestCase
                     && $context['current_usage'] === 1
                     && isset($context['suggestion']);
             });
+
+        $counters = UsageCounter::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('event_id', $event->id)
+            ->where('key', UsageCounter::KEY_SCAN_COUNT)
+            ->get();
+
+        $this->assertCount(1, $counters);
+        $this->assertSame(1, $counters->first()->value);
+    }
+
+    public function test_event_limit_is_relaxed_immediately_after_plan_upgrade(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2024-07-10T00:00:00Z'));
+
+        $basicPlan = Plan::factory()->create([
+            'limits_json' => [
+                'max_events' => 1,
+            ],
+        ]);
+        $premiumPlan = Plan::factory()->create([
+            'limits_json' => [
+                'max_events' => 3,
+            ],
+        ]);
+
+        $tenant = Tenant::factory()->create([
+            'plan' => $basicPlan->code,
+        ]);
+
+        $subscription = Subscription::factory()
+            ->for($tenant)
+            ->for($basicPlan)
+            ->create([
+                'status' => Subscription::STATUS_ACTIVE,
+                'current_period_start' => CarbonImmutable::now()->startOfMonth(),
+                'current_period_end' => CarbonImmutable::now()->endOfMonth(),
+            ]);
+
+        $tenant->setRelation('latestSubscription', $subscription);
+
+        $organizer = $this->createOrganizer($tenant);
+        $superAdmin = $this->createSuperAdmin();
+
+        UsageCounter::query()->create([
+            'tenant_id' => $tenant->id,
+            'key' => UsageCounter::KEY_EVENT_COUNT,
+            'value' => 1,
+            'period_start' => CarbonImmutable::now()->startOfMonth(),
+            'period_end' => CarbonImmutable::now()->endOfMonth(),
+        ]);
+
+        $blockedPayload = EventPayloadFactory::make($tenant, $organizer, [
+            'code' => 'UPGRADE-BLOCKED',
+        ]);
+
+        $blockedResponse = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->postJson('/events', $blockedPayload);
+
+        $blockedResponse->assertStatus(402);
+
+        $updateResponse = $this->actingAs($superAdmin, 'api')
+            ->patchJson(sprintf('/admin/tenants/%s', $tenant->id), [
+                'plan_id' => $premiumPlan->id,
+            ]);
+
+        $updateResponse->assertOk();
+
+        $allowedPayload = EventPayloadFactory::make($tenant, $organizer, [
+            'code' => 'UPGRADE-ALLOWED',
+        ]);
+
+        $allowedResponse = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->postJson('/events', $allowedPayload);
+
+        $allowedResponse->assertCreated();
+        $this->assertDatabaseHas('events', [
+            'tenant_id' => $tenant->id,
+            'code' => 'UPGRADE-ALLOWED',
+        ]);
+    }
+
+    public function test_event_limit_is_enforced_immediately_after_plan_downgrade(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2024-07-10T00:00:00Z'));
+
+        $premiumPlan = Plan::factory()->create([
+            'limits_json' => [
+                'max_events' => 3,
+            ],
+        ]);
+        $basicPlan = Plan::factory()->create([
+            'limits_json' => [
+                'max_events' => 1,
+            ],
+        ]);
+
+        $tenant = Tenant::factory()->create([
+            'plan' => $premiumPlan->code,
+        ]);
+
+        $subscription = Subscription::factory()
+            ->for($tenant)
+            ->for($premiumPlan)
+            ->create([
+                'status' => Subscription::STATUS_ACTIVE,
+                'current_period_start' => CarbonImmutable::now()->startOfMonth(),
+                'current_period_end' => CarbonImmutable::now()->endOfMonth(),
+            ]);
+
+        $tenant->setRelation('latestSubscription', $subscription);
+
+        $organizer = $this->createOrganizer($tenant);
+        $superAdmin = $this->createSuperAdmin();
+
+        $initialPayload = EventPayloadFactory::make($tenant, $organizer, [
+            'code' => 'DOWNGRADE-INITIAL',
+        ]);
+
+        $initialResponse = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->postJson('/events', $initialPayload);
+
+        $initialResponse->assertCreated();
+
+        $downgradeResponse = $this->actingAs($superAdmin, 'api')
+            ->patchJson(sprintf('/admin/tenants/%s', $tenant->id), [
+                'plan_id' => $basicPlan->id,
+            ]);
+
+        $downgradeResponse->assertOk();
+
+        $blockedPayload = EventPayloadFactory::make($tenant, $organizer, [
+            'code' => 'DOWNGRADE-BLOCKED',
+        ]);
+
+        $blockedResponse = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->postJson('/events', $blockedPayload);
+
+        $blockedResponse->assertStatus(402);
+
+        $usageValue = UsageCounter::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('key', UsageCounter::KEY_EVENT_COUNT)
+            ->value('value');
+
+        $this->assertSame(1, $usageValue);
     }
 
     public function test_csv_export_returns_forbidden_when_feature_disabled(): void
