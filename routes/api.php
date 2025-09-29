@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminAnalyticsController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
@@ -51,6 +52,12 @@ Route::middleware('api')->group(function (): void {
                 ->middleware('throttle:auth-forgot')
                 ->name('auth.forgot-password');
             Route::post('reset-password', [PasswordController::class, 'reset'])->name('auth.reset-password');
+        });
+
+    Route::middleware(['auth:api', 'role:superadmin'])
+        ->prefix('admin')
+        ->group(function (): void {
+            Route::get('analytics', [AdminAnalyticsController::class, 'index'])->name('admin.analytics.index');
         });
 
     Route::middleware(['auth:api', 'role:superadmin,organizer'])
