@@ -11,12 +11,15 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Consolidate raw attendance and RSVP data into hourly buckets.
  */
 class AggregateActivityHourly implements ShouldQueue
 {
+    private const LATENCY_ALERT_THRESHOLD_SECONDS = 600;
+
     use Dispatchable;
     use InteractsWithQueue;
     use Queueable;
@@ -27,6 +30,24 @@ class AggregateActivityHourly implements ShouldQueue
      */
     public function handle(): void
     {
+        $latencySeconds = $this->resolveQueueLatencySeconds();
+
+        if ($latencySeconds !== null) {
+            Log::info('metrics.distribution', [
+                'metric' => 'agg_job_latency_s',
+                'job' => self::class,
+                'value' => $latencySeconds,
+            ]);
+
+            if ($latencySeconds > self::LATENCY_ALERT_THRESHOLD_SECONDS) {
+                Log::warning('queue.latency_threshold_exceeded', [
+                    'job' => self::class,
+                    'latency_seconds' => $latencySeconds,
+                    'threshold_seconds' => self::LATENCY_ALERT_THRESHOLD_SECONDS,
+                ]);
+            }
+        }
+
         /**
          * @var array<string, array<string, array{date_hour: CarbonImmutable, invites_sent: int, rsvp_confirmed: int, scans_valid: int, scans_duplicate: int, unique_ticket_ids: array<string, bool>}>> $metrics
          */
@@ -152,5 +173,52 @@ class AggregateActivityHourly implements ShouldQueue
         }
 
         return $metrics[$eventId][$hourKey];
+    }
+
+    private function resolveQueueLatencySeconds(): ?int
+    {
+        if (! property_exists($this, 'job') || $this->job === null) {
+            return null;
+        }
+
+        $timestamp = null;
+
+        if (method_exists($this->job, 'availableAt')) {
+            $availableAt = $this->job->availableAt();
+
+            if (is_numeric($availableAt)) {
+                $timestamp = (int) $availableAt;
+            } elseif ($availableAt instanceof \DateTimeInterface) {
+                $timestamp = $availableAt->getTimestamp();
+            }
+        }
+
+        if ($timestamp === null && method_exists($this->job, 'getQueueableTimestamp')) {
+            $queueable = $this->job->getQueueableTimestamp();
+
+            if (is_numeric($queueable)) {
+                $timestamp = (int) $queueable;
+            }
+        }
+
+        if ($timestamp === null && method_exists($this->job, 'payload')) {
+            $payload = $this->job->payload();
+
+            if (is_array($payload)) {
+                $pushedAt = $payload['pushedAt'] ?? null;
+
+                if (is_numeric($pushedAt)) {
+                    $timestamp = (int) $pushedAt;
+                }
+            }
+        }
+
+        if ($timestamp === null) {
+            return null;
+        }
+
+        $now = CarbonImmutable::now()->getTimestamp();
+
+        return $now > $timestamp ? $now - $timestamp : 0;
     }
 }

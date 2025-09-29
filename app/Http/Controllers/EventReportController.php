@@ -13,6 +13,7 @@ use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use function number_format;
@@ -70,55 +71,94 @@ class EventReportController extends Controller
             );
         }
 
+        $generationStartedAt = microtime(true);
+
         [$from, $to] = $range;
         $checkpointId = $validated['checkpoint_id'] ?? null;
 
         $filename = sprintf('attendance-%s.csv', $event->id);
 
         $callback = function () use ($event, $from, $to, $checkpointId): void {
+            $startedAt = microtime(true);
+            $bytesWritten = 0;
+            $status = 'success';
+
             $handle = fopen('php://output', 'wb');
 
             if ($handle === false) {
-                return;
+                $status = 'stream_unavailable';
+            } else {
+                try {
+                    $written = fputcsv($handle, [
+                        'timestamp',
+                        'checkpoint',
+                        'ticket',
+                        'guest',
+                        'hostess',
+                        'result',
+                    ]);
+
+                    if ($written === false) {
+                        $status = 'write_failed';
+                    } else {
+                        $bytesWritten += $written;
+
+                        Attendance::query()
+                            ->with(['guest', 'ticket', 'checkpoint', 'hostess'])
+                            ->where('event_id', $event->id)
+                            ->when($checkpointId !== null, static function ($query) use ($checkpointId) {
+                                $query->where('checkpoint_id', $checkpointId);
+                            })
+                            ->when($from !== null, static function ($query) use ($from) {
+                                $query->where('scanned_at', '>=', $from);
+                            })
+                            ->when($to !== null, static function ($query) use ($to) {
+                                $query->where('scanned_at', '<=', $to);
+                            })
+                            ->orderBy('scanned_at')
+                            ->orderBy('id')
+                            ->chunk(self::CSV_CHUNK_SIZE, static function ($attendances) use ($handle, &$bytesWritten, &$status): void {
+                                if ($status !== 'success') {
+                                    return;
+                                }
+
+                                foreach ($attendances as $attendance) {
+                                    $written = fputcsv($handle, [
+                                        optional($attendance->scanned_at)->toISOString(),
+                                        $attendance->checkpoint?->name,
+                                        $attendance->ticket_id,
+                                        $attendance->guest?->full_name,
+                                        $attendance->hostess?->name,
+                                        $attendance->result,
+                                    ]);
+
+                                    if ($written === false) {
+                                        $status = 'write_failed';
+                                        break;
+                                    }
+
+                                    $bytesWritten += $written;
+                                }
+                            });
+                    }
+                } finally {
+                    fclose($handle);
+                }
             }
 
-            fputcsv($handle, [
-                'timestamp',
-                'checkpoint',
-                'ticket',
-                'guest',
-                'hostess',
-                'result',
+            $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+            Log::info('exports.generated', [
+                'type' => 'attendance_csv',
+                'event_id' => (string) $event->id,
+                'tenant_id' => (string) $event->tenant_id,
+                'bytes' => $bytesWritten,
+                'duration_ms' => $durationMs,
+                'status' => $status,
+                'from' => $from?->toISOString(),
+                'to' => $to?->toISOString(),
+                'checkpoint_id' => $checkpointId,
             ]);
-
-            Attendance::query()
-                ->with(['guest', 'ticket', 'checkpoint', 'hostess'])
-                ->where('event_id', $event->id)
-                ->when($checkpointId !== null, static function ($query) use ($checkpointId) {
-                    $query->where('checkpoint_id', $checkpointId);
-                })
-                ->when($from !== null, static function ($query) use ($from) {
-                    $query->where('scanned_at', '>=', $from);
-                })
-                ->when($to !== null, static function ($query) use ($to) {
-                    $query->where('scanned_at', '<=', $to);
-                })
-                ->orderBy('scanned_at')
-                ->orderBy('id')
-                ->chunk(self::CSV_CHUNK_SIZE, static function ($attendances) use ($handle): void {
-                    foreach ($attendances as $attendance) {
-                        fputcsv($handle, [
-                            optional($attendance->scanned_at)->toISOString(),
-                            $attendance->checkpoint?->name,
-                            $attendance->ticket_id,
-                            $attendance->guest?->full_name,
-                            $attendance->hostess?->name,
-                            $attendance->result,
-                        ]);
-                    }
-                });
-
-            fclose($handle);
         };
 
         return response()->streamDownload($callback, $filename, [
@@ -215,7 +255,23 @@ class EventReportController extends Controller
             );
         }
 
-        return response($dompdf->output(), 200, [
+        $pdf = $dompdf->output();
+
+        $durationMs = (int) round((microtime(true) - $generationStartedAt) * 1000);
+        $bytes = strlen($pdf);
+
+        Log::info('exports.generated', [
+            'type' => 'summary_pdf',
+            'event_id' => (string) $event->id,
+            'tenant_id' => (string) $event->tenant_id,
+            'bytes' => $bytes,
+            'duration_ms' => $durationMs,
+            'pages' => $pageCount,
+            'from' => $from?->toISOString(),
+            'to' => $to?->toISOString(),
+        ]);
+
+        return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="summary.pdf"',
             'X-Report-Pages' => (string) $pageCount,
