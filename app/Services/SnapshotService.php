@@ -8,6 +8,7 @@ use App\Services\Analytics\AnalyticsService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 /**
@@ -48,6 +49,8 @@ class SnapshotService
 
         $normalisedParams = $this->normaliseParams(Arr::except($params, ['tenant_id', 'event_id', 'ttl']));
 
+        $startedAt = microtime(true);
+
         /** @var ReportSnapshot|null $existing */
         $existing = ReportSnapshot::query()
             ->where('tenant_id', $tenantId)
@@ -57,10 +60,20 @@ class SnapshotService
             ->first();
 
         if ($existing !== null && ! $existing->hasExpired()) {
+            $this->logSnapshotTiming($tenantId, $eventId, $type, $startedAt, true);
+            Log::info('metrics.counter', [
+                'metric' => 'snapshot_cache_hit',
+                'tenant_id' => $tenantId,
+                'event_id' => $eventId,
+                'snapshot_type' => $type,
+            ]);
+
             return $existing->result_json ?? [];
         }
 
         $result = $this->computeFreshResult($type, $eventId, $params);
+
+        $this->logSnapshotTiming($tenantId, $eventId, $type, $startedAt, false);
 
         DB::transaction(function () use (&$existing, $tenantId, $eventId, $type, $normalisedParams, $ttlSeconds, $result): void {
             $payload = [
@@ -84,6 +97,25 @@ class SnapshotService
         });
 
         return $result;
+    }
+
+    private function logSnapshotTiming(
+        string $tenantId,
+        string $eventId,
+        string $type,
+        float $startedAt,
+        bool $cacheHit
+    ): void {
+        $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+        Log::info('metrics.distribution', [
+            'metric' => 'snapshot_compute_time_ms',
+            'tenant_id' => $tenantId,
+            'event_id' => $eventId,
+            'snapshot_type' => $type,
+            'value' => $durationMs,
+            'cache_hit' => $cacheHit,
+        ]);
     }
 
     /**
