@@ -222,7 +222,7 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
           </Tabs>
           <Box sx={{ p: { xs: 2, md: 3 } }}>
             {tab === 'summary' && summaryContent()}
-            {tab === 'dashboard' && <EventDashboardTab eventId={eventId} />}
+            {tab === 'dashboard' && <EventDashboardTab eventId={eventId} eventTimezone={eventData?.timezone} />}
             {tab === 'guests' && <EventGuestsTab eventId={eventId} />}
             {tab === 'venues' && <EventVenuesTab eventId={eventId} />}
           </Box>
