@@ -71,6 +71,38 @@ class EventVenueCheckpointFeatureTest extends TestCase
         $response->assertForbidden();
     }
 
+    public function test_organizer_cannot_view_or_update_event_from_other_tenant(): void
+    {
+        $tenantA = Tenant::factory()->create();
+        $tenantB = Tenant::factory()->create();
+
+        $organizerA = $this->createOrganizer($tenantA);
+        $organizerB = $this->createOrganizer($tenantB);
+
+        $event = Event::factory()->for($tenantA)->for($organizerA, 'organizer')->create([
+            'name' => 'Secure Event',
+        ]);
+
+        $viewResponse = $this->actingAs($organizerB, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenantB->id])
+            ->getJson('/events/' . $event->id);
+
+        $viewResponse->assertNotFound();
+
+        $updateResponse = $this->actingAs($organizerB, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenantB->id])
+            ->patchJson('/events/' . $event->id, [
+                'name' => 'Unauthorized Update',
+            ]);
+
+        $updateResponse->assertNotFound();
+
+        $this->assertDatabaseHas('events', [
+            'id' => $event->id,
+            'name' => 'Secure Event',
+        ]);
+    }
+
     public function test_superadmin_lists_events_across_all_tenants(): void
     {
         $tenantA = Tenant::factory()->create();

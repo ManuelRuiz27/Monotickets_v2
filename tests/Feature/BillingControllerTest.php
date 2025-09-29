@@ -151,6 +151,99 @@ class BillingControllerTest extends TestCase
         $this->assertCount(3, $invoice->line_items_json);
     }
 
+    public function test_close_ignores_usage_outside_current_period(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $plan = Plan::factory()->create([
+            'price_cents' => 5000,
+            'limits_json' => [
+                'included_users' => 2,
+                'included_scans' => 10,
+                'user_overage_price_cents' => 1000,
+                'scan_overage_price_cents' => 5,
+                'tax_cents' => 0,
+            ],
+        ]);
+
+        Subscription::factory()
+            ->for($tenant)
+            ->for($plan)
+            ->create([
+                'current_period_start' => $this->periodStart,
+                'current_period_end' => $this->periodEnd,
+            ]);
+
+        UsageCounter::query()->create([
+            'tenant_id' => $tenant->id,
+            'key' => UsageCounter::KEY_USER_COUNT,
+            'event_id' => null,
+            'value' => 4,
+            'period_start' => $this->periodStart,
+            'period_end' => $this->periodEnd,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        UsageCounter::query()->create([
+            'tenant_id' => $tenant->id,
+            'key' => UsageCounter::KEY_SCAN_COUNT,
+            'event_id' => null,
+            'value' => 18,
+            'period_start' => $this->periodStart,
+            'period_end' => $this->periodEnd,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $previousPeriodStart = $this->periodStart->subMonth()->startOfMonth();
+        $previousPeriodEnd = $previousPeriodStart->endOfMonth();
+
+        UsageCounter::query()->create([
+            'tenant_id' => $tenant->id,
+            'key' => UsageCounter::KEY_USER_COUNT,
+            'event_id' => null,
+            'value' => 25,
+            'period_start' => $previousPeriodStart,
+            'period_end' => $previousPeriodEnd,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $nextPeriodStart = $this->periodStart->addMonth()->startOfMonth();
+        $nextPeriodEnd = $nextPeriodStart->endOfMonth();
+
+        UsageCounter::query()->create([
+            'tenant_id' => $tenant->id,
+            'key' => UsageCounter::KEY_SCAN_COUNT,
+            'event_id' => null,
+            'value' => 50,
+            'period_start' => $nextPeriodStart,
+            'period_end' => $nextPeriodEnd,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $owner = $this->createTenantOwner($tenant);
+
+        $response = $this->actingAs($owner, 'api')->postJson('/billing/invoices/close', [], [
+            'X-Tenant-ID' => $tenant->id,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('data.period_start', $this->periodStart->toIso8601String());
+        $response->assertJsonPath('data.period_end', $this->periodEnd->toIso8601String());
+        $response->assertJsonPath('data.total_cents', 7040);
+        $response->assertJsonCount(3, 'data.line_items');
+        $response->assertJsonPath('data.line_items.0.type', 'base_plan');
+        $response->assertJsonPath('data.line_items.1.quantity', 2); // 4 users - 2 included
+        $response->assertJsonPath('data.line_items.2.quantity', 8); // 18 scans - 10 included
+
+        $invoice = Invoice::query()->first();
+        $this->assertNotNull($invoice);
+        $this->assertSame(7040, $invoice->total_cents);
+        $this->assertCount(3, $invoice->line_items_json);
+    }
+
     public function test_pay_marks_invoice_as_paid_and_records_payment(): void
     {
         $tenant = Tenant::factory()->create();
