@@ -293,10 +293,21 @@ class AdminTenantController extends Controller
             ? CarbonImmutable::parse($validated['to'])->endOfMonth()
             : $now->endOfMonth();
 
+        $tenantModel->loadMissing('latestSubscription.plan');
+
         $series = $this->buildUsageSeries($tenantModel, $from, $to);
+        $currentUsage = $this->loadCurrentUsage([$tenantModel->id])[$tenantModel->id] ?? [];
+        $summary = $this->formatTenantSummary($tenantModel, $currentUsage);
 
         return response()->json([
             'data' => $series,
+            'meta' => [
+                'tenant' => $summary,
+                'requested_period' => [
+                    'from' => $from->toIso8601String(),
+                    'to' => $to->toIso8601String(),
+                ],
+            ],
         ]);
     }
 
@@ -348,7 +359,10 @@ class AdminTenantController extends Controller
                 'id' => (string) $plan->id,
                 'code' => $plan->code,
                 'name' => $plan->name,
+                'price_cents' => (int) $plan->price_cents,
                 'billing_cycle' => $plan->billing_cycle,
+                'limits' => is_array($plan->limits_json) ? $plan->limits_json : [],
+                'features' => is_array($plan->features_json) ? $plan->features_json : [],
             ] : null,
             'subscription' => $subscription !== null ? [
                 'id' => (string) $subscription->id,
@@ -364,6 +378,7 @@ class AdminTenantController extends Controller
                 'scan_count' => (int) ($usage[UsageCounter::KEY_SCAN_COUNT] ?? 0),
             ],
             'limits_override' => $tenant->limitOverrides(),
+            'effective_limits' => $tenant->effectiveLimits($plan),
             'created_at' => optional($tenant->created_at)->toISOString(),
             'updated_at' => optional($tenant->updated_at)->toISOString(),
         ];

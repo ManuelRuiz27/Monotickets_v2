@@ -127,7 +127,13 @@ class AdminTenantControllerTest extends TestCase
         $now = CarbonImmutable::now()->startOfMonth();
         CarbonImmutable::setTestNow($now);
 
-        $plan = Plan::factory()->create(['code' => 'basic']);
+        $plan = Plan::factory()->create([
+            'code' => 'basic',
+            'limits_json' => [
+                'max_events' => 5,
+                'max_users' => 10,
+            ],
+        ]);
 
         $tenantActive = Tenant::factory()->create(['plan' => $plan->code]);
         $tenantPaused = Tenant::factory()->create(['plan' => $plan->code]);
@@ -188,6 +194,7 @@ class AdminTenantControllerTest extends TestCase
         $response->assertJsonPath('data.0.usage.event_count', 3);
         $response->assertJsonPath('data.0.usage.user_count', 8);
         $response->assertJsonPath('data.0.usage.scan_count', 25);
+        $response->assertJsonPath('data.0.effective_limits.max_events', 5);
 
         CarbonImmutable::setTestNow();
     }
@@ -197,7 +204,13 @@ class AdminTenantControllerTest extends TestCase
         $now = CarbonImmutable::parse('2024-05-01T00:00:00Z');
         CarbonImmutable::setTestNow($now);
 
-        $plan = Plan::factory()->create(['code' => 'standard']);
+        $plan = Plan::factory()->create([
+            'code' => 'standard',
+            'limits_json' => [
+                'max_events' => 10,
+                'max_users' => 20,
+            ],
+        ]);
         $tenant = Tenant::factory()->create(['plan' => $plan->code]);
 
         $subscription = Subscription::factory()->create([
@@ -267,6 +280,10 @@ class AdminTenantControllerTest extends TestCase
         $response->assertJsonPath('data.0.scan_breakdown.0.value', 15);
         $response->assertJsonPath('data.1.scan_breakdown.1.event_id', $eventB->id);
         $response->assertJsonPath('data.1.user_count', 10);
+        $response->assertJsonPath('meta.tenant.id', $tenant->id);
+        $response->assertJsonPath('meta.tenant.plan.code', $plan->code);
+        $response->assertJsonPath('meta.requested_period.from', '2024-04-01T00:00:00+00:00');
+        $response->assertJsonPath('meta.requested_period.to', '2024-05-31T23:59:59+00:00');
 
         CarbonImmutable::setTestNow();
     }

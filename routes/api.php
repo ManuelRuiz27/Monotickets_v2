@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminAnalyticsController;
+use App\Http\Controllers\AdminPlanController;
 use App\Http\Controllers\AdminTenantController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
@@ -62,6 +63,7 @@ Route::middleware('api')->group(function (): void {
         ->prefix('admin')
         ->group(function (): void {
             Route::get('analytics', [AdminAnalyticsController::class, 'index'])->name('admin.analytics.index');
+            Route::get('plans', [AdminPlanController::class, 'index'])->name('admin.plans.index');
             Route::get('tenants', [AdminTenantController::class, 'index'])->name('admin.tenants.index');
             Route::post('tenants', [AdminTenantController::class, 'store'])->name('admin.tenants.store');
             Route::patch('tenants/{tenant}', [AdminTenantController::class, 'update'])->name('admin.tenants.update');

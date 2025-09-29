@@ -10,6 +10,8 @@ import GuestDetail from './pages/GuestDetail';
 import Hostess from './pages/Hostess';
 import AdminAnalytics from './pages/AdminAnalytics';
 import TenantSettings from './pages/TenantSettings';
+import AdminTenants from './pages/AdminTenants';
+import TenantUsage from './pages/TenantUsage';
 import { RequireAuth, RequireRole } from './routes/guards';
 import Layout from './components/Layout';
 
@@ -38,6 +40,22 @@ function App() {
           element={
             <RequireRole roles={['superadmin']}>
               <AdminAnalytics />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="admin/tenants"
+          element={
+            <RequireRole roles={['superadmin']}>
+              <AdminTenants />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="admin/tenants/:tenantId/usage"
+          element={
+            <RequireRole roles={['superadmin']}>
+              <TenantUsage />
             </RequireRole>
           }
         />
