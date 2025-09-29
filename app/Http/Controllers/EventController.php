@@ -8,7 +8,11 @@ use App\Http\Requests\Event\EventIndexRequest;
 use App\Http\Requests\Event\EventStoreRequest;
 use App\Http\Requests\Event\EventUpdateRequest;
 use App\Models\Event;
+use App\Models\Tenant;
+use App\Models\UsageCounter;
 use App\Models\User;
+use App\Services\LimitsService;
+use App\Services\UsageService;
 use App\Support\ApiResponse;
 use App\Support\Audit\RecordsAuditLogs;
 use App\Support\Logging\StructuredLogging;
@@ -27,6 +31,12 @@ class EventController extends Controller
     use InteractsWithTenants;
     use RecordsAuditLogs;
     use StructuredLogging;
+
+    public function __construct(
+        private readonly LimitsService $limitsService,
+        private readonly UsageService $usageService,
+    ) {
+    }
 
     /**
      * Display a paginated list of events with filtering capabilities.
@@ -111,10 +121,23 @@ class EventController extends Controller
             ]);
         }
 
+        /** @var Tenant|null $tenant */
+        $tenant = Tenant::query()->find($tenantId);
+
+        if ($tenant === null) {
+            $this->throwValidationException([
+                'tenant_id' => ['The selected tenant could not be found.'],
+            ]);
+        }
+
         if (! $this->organizerBelongsToTenant($validated['organizer_user_id'], $tenantId)) {
             $this->throwValidationException([
                 'organizer_user_id' => ['The organizer must belong to the selected tenant.'],
             ]);
+        }
+
+        if ($validated['status'] !== 'archived') {
+            $this->limitsService->assertCan($tenant, LimitsService::ACTION_CREATE_EVENT);
         }
 
         $this->assertUniqueEventCode($tenantId, $validated['code']);
@@ -142,6 +165,10 @@ class EventController extends Controller
 
             return $event->refresh();
         });
+
+        if ($event->status !== 'archived') {
+            $this->usageService->increment($tenant, UsageCounter::KEY_EVENT_COUNT);
+        }
 
         $eventSnapshot = $this->eventAuditSnapshot($event);
 
@@ -204,6 +231,10 @@ class EventController extends Controller
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
         }
 
+        $event->loadMissing('tenant');
+        $tenant = $event->tenant;
+        $wasArchived = $event->status === 'archived';
+
         $validated = $request->validated();
 
         if (isset($validated['code'])) {
@@ -242,6 +273,10 @@ class EventController extends Controller
 
         $this->assertPublishingReadiness($finalStatus, $finalName, $finalOrganizer, $startAt, $endAt);
 
+        if ($tenant !== null && $wasArchived && $finalStatus !== 'archived') {
+            $this->limitsService->assertCan($tenant, LimitsService::ACTION_ACTIVATE_EVENT);
+        }
+
         $originalSnapshot = $this->eventAuditSnapshot($event);
 
         if ($payload !== []) {
@@ -262,6 +297,16 @@ class EventController extends Controller
 
         $event->save();
         $event->refresh();
+
+        if ($tenant !== null) {
+            $isArchived = $event->status === 'archived';
+
+            if ($wasArchived && ! $isArchived) {
+                $this->usageService->increment($tenant, UsageCounter::KEY_EVENT_COUNT);
+            } elseif (! $wasArchived && $isArchived) {
+                $this->usageService->increment($tenant, UsageCounter::KEY_EVENT_COUNT, [], -1);
+            }
+        }
 
         $updatedSnapshot = $this->eventAuditSnapshot($event);
         $changes = $this->calculateDifferences($originalSnapshot, $updatedSnapshot);
