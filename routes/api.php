@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\RefreshTokenController;
+use App\Http\Controllers\Billing\BillingController;
 use App\Http\Controllers\CheckpointController;
 use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\EventAttendanceController;
@@ -186,4 +187,12 @@ Route::middleware('api')->group(function (): void {
             ->name('scan.store');
         Route::post('scan/batch', [ScanController::class, 'batch'])->name('scan.batch');
     });
+
+    Route::middleware(['auth:api', 'role:superadmin,tenant_owner'])
+        ->prefix('billing')
+        ->group(function (): void {
+            Route::post('preview', [BillingController::class, 'preview'])->name('billing.preview');
+            Route::post('invoices/close', [BillingController::class, 'close'])->name('billing.invoices.close');
+            Route::post('invoices/{invoiceId}/pay', [BillingController::class, 'pay'])->name('billing.invoices.pay');
+        });
 });

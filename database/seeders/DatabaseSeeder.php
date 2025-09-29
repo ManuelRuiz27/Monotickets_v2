@@ -52,6 +52,13 @@ class DatabaseSeeder extends Seeder
             'description' => 'Supports on-site attendee operations.',
         ]);
 
+        $tenantOwnerRole = Role::create([
+            'tenant_id' => $tenant->id,
+            'code' => 'tenant_owner',
+            'name' => 'Tenant Owner',
+            'description' => 'Owner of the tenant billing and configuration.',
+        ]);
+
         $superadmin = User::create([
             'tenant_id' => null,
             'name' => 'Super Admin',
@@ -85,6 +92,16 @@ class DatabaseSeeder extends Seeder
             ->create();
 
         $hostess->roles()->attach($hostessRole->id, ['tenant_id' => $tenant->id]);
+
+        $tenantOwner = User::factory()
+            ->for($tenant)
+            ->state([
+                'name' => 'Tenant Owner',
+                'email' => 'owner@demo.test',
+            ])
+            ->create();
+
+        $tenantOwner->roles()->attach($tenantOwnerRole->id, ['tenant_id' => $tenant->id]);
 
         $demoEvent = Event::create([
             'tenant_id' => $tenant->id,

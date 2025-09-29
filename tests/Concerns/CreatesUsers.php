@@ -62,4 +62,22 @@ trait CreatesUsers
 
         return $user->fresh();
     }
+
+    /**
+     * Create a tenant owner bound to the provided tenant.
+     */
+    protected function createTenantOwner(?Tenant $tenant = null): User
+    {
+        $tenant ??= Tenant::factory()->create();
+
+        $role = Role::factory()->create([
+            'code' => 'tenant_owner',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $user = User::factory()->create(['tenant_id' => $tenant->id]);
+        $user->roles()->attach($role->id, ['tenant_id' => $tenant->id]);
+
+        return $user->fresh();
+    }
 }
