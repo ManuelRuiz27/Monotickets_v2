@@ -85,7 +85,7 @@ Route::middleware('api')->group(function (): void {
             Route::get('{event_id}/guests', [GuestController::class, 'index'])->name('events.guests.index');
             Route::post('{event_id}/guests', [GuestController::class, 'store'])->name('events.guests.store');
 
-            Route::prefix('{event_id}/dashboard')->group(function (): void {
+            Route::prefix('{event_id}/dashboard')->middleware('cache.dashboard')->group(function (): void {
                 Route::get('overview', [EventDashboardController::class, 'overview'])->name('events.dashboard.overview');
                 Route::get('attendance-by-hour', [EventDashboardController::class, 'attendanceByHour'])->name('events.dashboard.attendance-by-hour');
                 Route::get('checkpoint-totals', [EventDashboardController::class, 'checkpointTotals'])->name('events.dashboard.checkpoint-totals');
@@ -94,8 +94,12 @@ Route::middleware('api')->group(function (): void {
             });
 
             Route::prefix('{event_id}/reports')->group(function (): void {
-                Route::get('attendance.csv', [EventReportController::class, 'attendanceCsv'])->name('events.reports.attendance');
-                Route::get('summary.pdf', [EventReportController::class, 'summaryPdf'])->name('events.reports.summary');
+                Route::get('attendance.csv', [EventReportController::class, 'attendanceCsv'])
+                    ->middleware('throttle:reports-export')
+                    ->name('events.reports.attendance');
+                Route::get('summary.pdf', [EventReportController::class, 'summaryPdf'])
+                    ->middleware('throttle:reports-export')
+                    ->name('events.reports.summary');
             });
 
             Route::post('{event_id}/imports', [ImportController::class, 'store'])->name('events.imports.store');

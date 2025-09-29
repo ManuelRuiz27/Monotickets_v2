@@ -2,11 +2,13 @@
 
 namespace App\Providers;
 
+use App\Events\AttendanceCreated;
 use App\Events\ImportProcessingCompleted;
 use App\Events\ImportProcessingStarted;
 use App\Events\QrRotated;
 use App\Events\TicketIssued;
 use App\Events\TicketRevoked;
+use App\Listeners\InvalidateDashboardCache;
 use App\Listeners\RecordImportCompletedAudit;
 use App\Listeners\RecordImportStartedAudit;
 use App\Listeners\RecordQrRotatedAudit;
@@ -37,6 +39,12 @@ class EventServiceProvider extends ServiceProvider
         ],
         ImportProcessingCompleted::class => [
             RecordImportCompletedAudit::class,
+        ],
+        AttendanceCreated::class => [
+            InvalidateDashboardCache::class,
+        ],
+        'attendance.created' => [
+            InvalidateDashboardCache::class,
         ],
     ];
 

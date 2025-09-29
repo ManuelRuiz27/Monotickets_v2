@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class Event extends Model
@@ -169,5 +171,41 @@ class Event extends Model
     public function imports(): HasMany
     {
         return $this->hasMany(Import::class);
+    }
+
+    /**
+     * Determine if the event should be treated as running in live mode.
+     */
+    public function isLiveMode(): bool
+    {
+        $settings = $this->settings_json;
+
+        if (is_array($settings)) {
+            $mode = Arr::get($settings, 'mode');
+
+            if (is_string($mode)) {
+                $normalised = (string) Str::of($mode)->lower()->replace(' ', '_');
+
+                if (in_array($normalised, ['live', 'en_vivo', 'envivo'], true)) {
+                    return true;
+                }
+            }
+
+            $liveFlag = Arr::get($settings, 'live_mode');
+
+            if (is_bool($liveFlag)) {
+                return $liveFlag;
+            }
+
+            if (is_string($liveFlag)) {
+                $normalised = Str::of($liveFlag)->lower()->trim();
+
+                if (in_array($normalised, ['1', 'true', 'on', 'yes', 'live'], true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }
