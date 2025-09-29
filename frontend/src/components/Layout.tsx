@@ -23,6 +23,7 @@ const Layout = () => {
             Dashboard
           </NavLink>
           {canAccessSettings && <NavLink to="/settings">Configuración</NavLink>}
+          {isSuperAdmin && <NavLink to="/admin/tenants">Tenants</NavLink>}
           {isSuperAdmin && <NavLink to="/admin/analytics">Analítica</NavLink>}
           {canManageEvents && <NavLink to="/events">Eventos</NavLink>}
           {canManageEvents && <NavLink to="/users">Usuarios</NavLink>}
