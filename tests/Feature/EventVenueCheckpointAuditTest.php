@@ -25,6 +25,26 @@ class EventVenueCheckpointAuditTest extends TestCase
         config(['tenant.id' => null]);
     }
 
+    public function test_superadmin_impersonation_is_logged(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $superAdmin = $this->createSuperAdmin();
+
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->getJson('/events');
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'tenant_id' => $tenant->id,
+            'user_id' => $superAdmin->id,
+            'entity' => 'tenant',
+            'entity_id' => $tenant->id,
+            'action' => 'impersonate_tenant',
+        ]);
+    }
+
     public function test_event_creation_records_audit_log_entry(): void
     {
         $tenant = Tenant::factory()->create();

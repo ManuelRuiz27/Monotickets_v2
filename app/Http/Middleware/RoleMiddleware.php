@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Support\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -19,6 +20,10 @@ class RoleMiddleware
      * Allowed application roles.
      */
     private const ALLOWED_ROLES = ['superadmin', 'organizer', 'hostess'];
+
+    public function __construct(private readonly TenantContext $tenantContext)
+    {
+    }
 
     /**
      * Handle an incoming request.
@@ -40,14 +45,10 @@ class RoleMiddleware
             return $next($request);
         }
 
-        $tenantId = $request->headers->get('X-Tenant-ID');
+        $tenantId = $this->tenantContext->tenantId();
 
-        if (($tenantId === null || $tenantId === '') && $user->tenant_id !== null) {
-            $tenantId = (string) $user->tenant_id;
-        }
-
-        if ($tenantId === null || $tenantId === '') {
-            abort(Response::HTTP_FORBIDDEN, 'Missing X-Tenant-ID header.');
+        if ($tenantId === null) {
+            abort(Response::HTTP_FORBIDDEN, 'Missing tenant context.');
         }
 
         $hasRequiredRole = $user->roles->contains(function (Role $role) use ($tenantId, $requiredRoles): bool {

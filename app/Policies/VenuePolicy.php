@@ -5,7 +5,9 @@ namespace App\Policies;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Venue;
+use App\Support\TenantContext;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use function app;
 
 /**
  * Authorization policy for venue management.
@@ -92,10 +94,10 @@ class VenuePolicy
      */
     private function isSameTenant(User $user, string $tenantId): bool
     {
-        $tenantContext = config('tenant.id');
+        $tenantContext = app(TenantContext::class);
 
-        if ($tenantContext !== null && $tenantContext !== '') {
-            return (string) $tenantId === (string) $tenantContext;
+        if ($tenantContext->hasTenant()) {
+            return (string) $tenantId === (string) $tenantContext->tenantId();
         }
 
         return (string) $user->tenant_id === (string) $tenantId;

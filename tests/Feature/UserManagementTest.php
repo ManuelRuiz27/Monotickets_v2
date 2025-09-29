@@ -62,6 +62,30 @@ class UserManagementTest extends TestCase
         $response->assertJsonPath('meta.total', 3);
     }
 
+    public function test_superadmin_impersonates_tenant_to_list_users(): void
+    {
+        $tenantA = Tenant::factory()->create();
+        $tenantB = Tenant::factory()->create();
+
+        $hostessRoleA = Role::factory()->create(['code' => 'hostess', 'tenant_id' => $tenantA->id]);
+        $hostessRoleB = Role::factory()->create(['code' => 'hostess', 'tenant_id' => $tenantB->id]);
+
+        $userA = User::factory()->create(['tenant_id' => $tenantA->id]);
+        $userB = User::factory()->create(['tenant_id' => $tenantB->id]);
+        $userA->roles()->attach($hostessRoleA->id, ['tenant_id' => $tenantA->id]);
+        $userB->roles()->attach($hostessRoleB->id, ['tenant_id' => $tenantB->id]);
+
+        $superAdmin = $this->createSuperAdmin();
+
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenantA->id])
+            ->getJson('/users');
+
+        $response->assertOk();
+        $this->assertTrue(collect($response->json('data'))
+            ->every(fn (array $user) => $user['tenant_id'] === $tenantA->id));
+    }
+
     public function test_superadmin_can_list_users_with_filters(): void
     {
         $tenant = Tenant::factory()->create();
@@ -96,7 +120,9 @@ class UserManagementTest extends TestCase
         ]);
         $otherUser->roles()->attach($otherRole->id, ['tenant_id' => $otherTenant->id]);
 
-        $response = $this->actingAs($superAdmin, 'api')->getJson('/users?role=hostess&is_active=1&search=Host');
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->getJson('/users?role=hostess&is_active=1&search=Host');
 
         $response->assertOk();
         $response->assertJsonCount(1, 'data');

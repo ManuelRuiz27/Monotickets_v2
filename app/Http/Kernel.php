@@ -18,7 +18,7 @@ class Kernel extends HttpKernel
             \App\Http\Middleware\EnsureJsonRequest::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            \App\Http\Middleware\EnsureTenantHeader::class,
+            \App\Http\Middleware\ResolveTenant::class,
             \App\Http\Middleware\SecureHeaders::class,
         ],
     ];

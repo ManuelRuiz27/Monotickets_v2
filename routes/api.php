@@ -23,7 +23,7 @@ use App\Http\Controllers\ScanController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VenueController;
-use App\Http\Middleware\EnsureTenantHeader;
+use App\Http\Middleware\ResolveTenant;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,7 +36,7 @@ use App\Http\Middleware\EnsureTenantHeader;
 
 Route::middleware('api')->group(function (): void {
     Route::prefix('auth')
-        ->withoutMiddleware([EnsureTenantHeader::class])
+        ->withoutMiddleware([ResolveTenant::class])
         ->group(function (): void {
             Route::post('login', [LoginController::class, 'login'])
                 ->middleware('throttle:auth-login')

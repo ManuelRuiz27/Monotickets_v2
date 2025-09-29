@@ -5,7 +5,9 @@ namespace App\Policies;
 use App\Models\HostessAssignment;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\TenantContext;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use function app;
 
 /**
  * Authorization policy for hostess assignment management.
@@ -89,10 +91,10 @@ class HostessAssignmentPolicy
      */
     private function isSameTenant(User $user, string $tenantId): bool
     {
-        $tenantContext = config('tenant.id');
+        $tenantContext = app(TenantContext::class);
 
-        if ($tenantContext !== null && $tenantContext !== '') {
-            return (string) $tenantContext === (string) $tenantId;
+        if ($tenantContext->hasTenant()) {
+            return (string) $tenantContext->tenantId() === (string) $tenantId;
         }
 
         return (string) $user->tenant_id === (string) $tenantId;
