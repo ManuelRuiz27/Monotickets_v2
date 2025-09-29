@@ -8,7 +8,11 @@ use App\Http\Requests\User\UserIndexRequest;
 use App\Http\Requests\User\UserStoreRequest;
 use App\Http\Requests\User\UserUpdateRequest;
 use App\Models\Role;
+use App\Models\Tenant;
+use App\Models\UsageCounter;
 use App\Models\User;
+use App\Services\LimitsService;
+use App\Services\UsageService;
 use App\Support\ApiResponse;
 use App\Support\Audit\RecordsAuditLogs;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -29,6 +33,12 @@ use function app;
 class UserController extends Controller
 {
     use RecordsAuditLogs;
+
+    public function __construct(
+        private readonly LimitsService $limitsService,
+        private readonly UsageService $usageService,
+    ) {
+    }
     /**
      * Display a paginated list of users for the current context.
      */
@@ -124,6 +134,15 @@ class UserController extends Controller
             ]);
         }
 
+        /** @var Tenant|null $tenant */
+        $tenant = Tenant::query()->find($tenantId);
+
+        if ($tenant === null) {
+            $this->throwValidationException([
+                'tenant_id' => ['The selected tenant could not be found.'],
+            ]);
+        }
+
         $roles = $this->resolveAssignableRoles($authUser, $validated['roles'], $tenantId);
 
         if ($roles->isEmpty()) {
@@ -133,6 +152,10 @@ class UserController extends Controller
         }
 
         $isActive = array_key_exists('is_active', $validated) ? (bool) $validated['is_active'] : true;
+
+        if ($isActive) {
+            $this->limitsService->assertCan($tenant, LimitsService::ACTION_CREATE_USER);
+        }
 
         $user = DB::transaction(function () use ($validated, $tenantId, $roles, $isActive, $authUser, $request) {
             $user = User::create([
@@ -153,6 +176,10 @@ class UserController extends Controller
 
             return $user;
         });
+
+        if ($isActive) {
+            $this->usageService->increment($tenant, UsageCounter::KEY_USER_COUNT);
+        }
 
         return response()->json([
             'data' => $this->formatUser($user),
@@ -189,7 +216,9 @@ class UserController extends Controller
         $authUser->loadMissing('roles');
 
         $validated = $request->validated();
-        $user->load('roles');
+        $user->load('roles', 'tenant');
+        $tenant = $user->tenant;
+        $wasActive = (bool) $user->is_active;
 
         $original = [
             'name' => $user->name,
@@ -207,7 +236,13 @@ class UserController extends Controller
         }
 
         if (array_key_exists('is_active', $validated)) {
-            $user->is_active = (bool) $validated['is_active'];
+            $newIsActive = (bool) $validated['is_active'];
+
+            if ($tenant !== null && ! $wasActive && $newIsActive) {
+                $this->limitsService->assertCan($tenant, LimitsService::ACTION_ACTIVATE_USER);
+            }
+
+            $user->is_active = $newIsActive;
         }
 
         $roles = null;
@@ -257,8 +292,23 @@ class UserController extends Controller
             }
         });
 
+        $user = $user->fresh(['roles', 'tenant']);
+
+        /** @var Tenant|null $currentTenant */
+        $currentTenant = $user->tenant ?? $tenant;
+
+        if ($currentTenant !== null) {
+            $isActive = (bool) $user->is_active;
+
+            if ($wasActive && ! $isActive) {
+                $this->usageService->increment($currentTenant, UsageCounter::KEY_USER_COUNT, [], -1);
+            } elseif (! $wasActive && $isActive) {
+                $this->usageService->increment($currentTenant, UsageCounter::KEY_USER_COUNT);
+            }
+        }
+
         return response()->json([
-            'data' => $this->formatUser($user->fresh('roles')),
+            'data' => $this->formatUser($user),
         ]);
     }
 

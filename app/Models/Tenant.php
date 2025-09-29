@@ -55,4 +55,24 @@ class Tenant extends Model
     {
         return $this->hasMany(AuditLog::class);
     }
+
+    /**
+     * Subscriptions owned by the tenant.
+     */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    /**
+     * Retrieve the most recent active subscription for the tenant.
+     */
+    public function activeSubscription(): ?Subscription
+    {
+        return $this->subscriptions()
+            ->active()
+            ->with('plan')
+            ->orderByDesc('current_period_end')
+            ->first();
+    }
 }
