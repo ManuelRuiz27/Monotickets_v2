@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Billing\BillingService;
 use App\Services\Billing\Exceptions\BillingPeriodAlreadyClosedException;
 use App\Support\ApiResponse;
+use App\Support\Audit\RecordsAuditLogs;
 use Carbon\CarbonImmutable;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,6 +27,7 @@ use Symfony\Component\HttpFoundation\Response;
 class BillingController extends Controller
 {
     use InteractsWithTenants;
+    use RecordsAuditLogs;
 
     public function __construct(private readonly BillingService $billingService)
     {
@@ -180,11 +183,24 @@ class BillingController extends Controller
 
         $subscription->loadMissing('plan');
 
+        $generationStartedAt = microtime(true);
+
         try {
             $invoice = $this->billingService->closePeriod($subscription);
         } catch (BillingPeriodAlreadyClosedException $exception) {
             $invoice = $exception->invoice();
             $invoice->loadMissing('payments');
+
+            $durationMs = (int) round((microtime(true) - $generationStartedAt) * 1000);
+
+            Log::info('metrics.distribution', [
+                'metric' => 'invoice_generation_time_ms',
+                'tenant_id' => (string) $tenant->id,
+                'invoice_id' => (string) $invoice->id,
+                'value' => $durationMs,
+                'trigger' => 'api',
+                'status' => 'already_closed',
+            ]);
 
             return ApiResponse::error(
                 'billing_period_closed',
@@ -197,6 +213,25 @@ class BillingController extends Controller
         $created = $invoice->wasRecentlyCreated;
         $invoice->loadMissing('payments');
 
+        $durationMs = (int) round((microtime(true) - $generationStartedAt) * 1000);
+
+        Log::info('metrics.distribution', [
+            'metric' => 'invoice_generation_time_ms',
+            'tenant_id' => (string) $invoice->tenant_id,
+            'invoice_id' => (string) $invoice->id,
+            'value' => $durationMs,
+            'trigger' => 'api',
+            'status' => $created ? 'created' : 'existing',
+        ]);
+
+        $this->recordAuditLog($user, $request, 'invoice', (string) $invoice->id, 'closed', [
+            'status' => $invoice->status,
+            'total_cents' => (int) $invoice->total_cents,
+            'period_start' => $invoice->period_start?->toIso8601String(),
+            'period_end' => $invoice->period_end?->toIso8601String(),
+            'created' => $created,
+        ], (string) $invoice->tenant_id);
+
         return response()->json([
             'data' => $this->formatInvoice($invoice),
         ], $created ? Response::HTTP_CREATED : Response::HTTP_OK);
@@ -204,7 +239,7 @@ class BillingController extends Controller
 
     public function pay(Request $request, string $invoiceId): JsonResponse
     {
-        [$invoice] = $this->resolveInvoice($request, $invoiceId);
+        [$invoice, $tenantId, $user] = $this->resolveInvoice($request, $invoiceId);
 
         if ($invoice === null) {
             return ApiResponse::error('invoice_not_found', 'The invoice could not be found for the current context.', null, Response::HTTP_NOT_FOUND);
@@ -213,6 +248,8 @@ class BillingController extends Controller
         if ($invoice->status === Invoice::STATUS_VOID) {
             return ApiResponse::error('invoice_void', 'The invoice is void and cannot be paid.', null, Response::HTTP_UNPROCESSABLE_ENTITY);
         }
+
+        $previousStatus = $invoice->status;
 
         if ($invoice->status !== Invoice::STATUS_PAID) {
             DB::transaction(function () use ($invoice) {
@@ -236,6 +273,20 @@ class BillingController extends Controller
         }
 
         $invoice->refresh()->load('payments');
+
+        if ($previousStatus !== $invoice->status) {
+            $this->recordAuditLog($user, $request, 'invoice', (string) $invoice->id, 'paid', [
+                'previous_status' => $previousStatus,
+                'status' => $invoice->status,
+                'paid_at' => $invoice->paid_at?->toIso8601String(),
+                'payments' => $invoice->payments->map(fn (Payment $payment): array => [
+                    'id' => (string) $payment->id,
+                    'amount_cents' => (int) $payment->amount_cents,
+                    'status' => $payment->status,
+                    'processed_at' => $payment->processed_at?->toIso8601String(),
+                ])->all(),
+            ], $tenantId ?? (string) $invoice->tenant_id);
+        }
 
         return response()->json([
             'data' => $this->formatInvoice($invoice),

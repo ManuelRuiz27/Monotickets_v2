@@ -68,6 +68,13 @@ class SnapshotService
                 'snapshot_type' => $type,
             ]);
 
+            Log::info('metrics.counter', [
+                'metric' => 'cache_hits_dashboard',
+                'tenant_id' => $tenantId,
+                'event_id' => $eventId,
+                'snapshot_type' => $type,
+            ]);
+
             return $existing->result_json ?? [];
         }
 

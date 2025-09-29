@@ -261,6 +261,22 @@ class AdminTenantController extends Controller
             ], $tenantModel->id);
         }
 
+        if (array_key_exists('plan', $changes) || array_key_exists('subscription_plan_id', $changes)) {
+            $this->recordAuditLog($authUser, $request, 'tenant', $tenantModel->id, 'plan_changed', [
+                'previous_plan' => $beforeAudit['plan'],
+                'previous_subscription_plan_id' => $beforeAudit['subscription_plan_id'],
+                'current_plan' => $afterAudit['plan'],
+                'current_subscription_plan_id' => $afterAudit['subscription_plan_id'],
+            ], $tenantModel->id);
+        }
+
+        if (array_key_exists('limits_override', $changes)) {
+            $this->recordAuditLog($authUser, $request, 'tenant', $tenantModel->id, 'limits_override_updated', [
+                'before' => $beforeAudit['limits_override'],
+                'after' => $afterAudit['limits_override'],
+            ], $tenantModel->id);
+        }
+
         return response()->json([
             'data' => $this->formatTenantSummary($tenantModel, $this->loadCurrentUsage([$tenantModel->id])[$tenantModel->id] ?? []),
         ]);

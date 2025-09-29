@@ -18,6 +18,7 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use function optional;
@@ -892,6 +893,15 @@ class ScanController extends Controller
             'device_id' => $deviceId,
             'hostess_user_id' => $authUser->id,
         ], $context), static fn ($value) => $value !== null);
+
+        if (isset($baseContext['tenant_id'])) {
+            Log::info('metrics.distribution', array_filter([
+                'metric' => 'tenant_scan_qps',
+                'tenant_id' => (string) $baseContext['tenant_id'],
+                'event_id' => $baseContext['event_id'] ?? null,
+                'value' => 1,
+            ], static fn ($value) => $value !== null));
+        }
 
         $this->logStructuredEvent($request, 'scan.processed', $baseContext);
     }

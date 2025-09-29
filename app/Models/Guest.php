@@ -21,6 +21,7 @@ class Guest extends Model
      */
     protected $fillable = [
         'event_id',
+        'tenant_id',
         'guest_list_id',
         'full_name',
         'email',
@@ -49,6 +50,18 @@ class Guest extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(new EventTenantScope());
+
+        static::creating(function (Guest $guest): void {
+            if ($guest->tenant_id === null && $guest->event_id !== null) {
+                $tenantId = Event::query()
+                    ->whereKey($guest->event_id)
+                    ->value('tenant_id');
+
+                if ($tenantId !== null) {
+                    $guest->tenant_id = $tenantId;
+                }
+            }
+        });
 
         static::deleting(function (Guest $guest): void {
             if ($guest->isForceDeleting()) {
@@ -93,5 +106,13 @@ class Guest extends Model
     public function attendances(): HasMany
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    /**
+     * Tenant associated with the guest.
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 }
