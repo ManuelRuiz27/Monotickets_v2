@@ -6,6 +6,7 @@ $defaultOrigins = implode(',', array_filter([
     'https://admin.monotickets.com',
     'http://localhost',
     'http://localhost:3000',
+    'http://localhost:5173',
 ]));
 
 return [
