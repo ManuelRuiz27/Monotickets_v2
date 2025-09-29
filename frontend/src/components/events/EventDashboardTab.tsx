@@ -25,15 +25,8 @@ import {
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import { DateTime } from 'luxon';
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-} from 'react';
+import { useTheme } from '@mui/material/styles';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
@@ -42,20 +35,21 @@ import { resolveApiUrl } from '../../api/client';
 import { useAuthStore } from '../../auth/store';
 import { useEventCheckpoints } from '../../hooks/useCheckpointsApi';
 import {
-  type AttendanceByHourEntry,
-  type CheckpointTotalsEntry,
-  type DashboardOverviewResponse,
   type GuestsByListEntry,
-  type RsvpFunnelResponse,
   useEventDashboardAttendanceByHour,
   useEventDashboardCheckpointTotals,
   useEventDashboardGuestsByList,
   useEventDashboardOverview,
   useEventDashboardRsvpFunnel,
 } from '../../hooks/useEventDashboard';
+import KpiCard from '../charts/KpiCard';
+import TimeSeries from '../charts/TimeSeries';
+import BarByCheckpoint from '../charts/BarByCheckpoint';
+import Donut from '../charts/Donut';
 
 interface EventDashboardTabProps {
   eventId: string;
+  eventTimezone?: string | null;
 }
 
 interface DashboardFiltersState {
@@ -63,225 +57,6 @@ interface DashboardFiltersState {
   to: string | null;
   checkpointId: string | null;
 }
-
-const KPIGrid = ({
-  overview,
-  validAttendances,
-  duplicateAttendances,
-}: {
-  overview: DashboardOverviewResponse['data'] | undefined;
-  validAttendances: number;
-  duplicateAttendances: number;
-}) => {
-  const occupancyRate = overview?.occupancy_rate ?? null;
-  const occupancyPercent = occupancyRate !== null ? `${Math.round(occupancyRate * 100)}%` : '—';
-
-  const cards = [
-    {
-      title: 'Invitados',
-      value: overview ? overview.invited.toLocaleString() : '—',
-    },
-    {
-      title: 'Confirmados',
-      value: overview ? overview.confirmed.toLocaleString() : '—',
-    },
-    {
-      title: 'Asistencias válidas',
-      value: overview ? validAttendances.toLocaleString() : '—',
-    },
-    {
-      title: 'Duplicados',
-      value: overview ? duplicateAttendances.toLocaleString() : '—',
-    },
-    {
-      title: '% Ocupación',
-      value: overview ? occupancyPercent : '—',
-    },
-  ];
-
-  return (
-    <Grid container spacing={2}>
-      {cards.map((card) => (
-        <Grid item xs={12} sm={6} md={4} lg={2} key={card.title}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="overline" color="text.secondary">
-                {card.title}
-              </Typography>
-              <Typography variant="h5" component="div">
-                {card.value}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      ))}
-    </Grid>
-  );
-};
-
-const LineChart = memo(({ data }: { data: AttendanceByHourEntry[] }) => {
-  const chartData = useMemo(() => data.filter((item) => item.hour !== null), [data]);
-
-  if (chartData.length === 0) {
-    return (
-      <Box py={4} display="flex" justifyContent="center">
-        <Typography variant="body2" color="text.secondary">
-          No hay datos suficientes para mostrar la gráfica.
-        </Typography>
-      </Box>
-    );
-  }
-
-  const maxValue = Math.max(1, ...chartData.map((item) => item.valid));
-  const points = chartData.map((item, index) => {
-    const x = (index / (chartData.length - 1 || 1)) * 100;
-    const y = 100 - (item.valid / maxValue) * 100;
-    return `${x},${y}`;
-  });
-
-  const labels = chartData.map((item) => {
-    const date = item.hour ? DateTime.fromISO(item.hour).toFormat('dd MMM HH:mm') : '—';
-    return { label: date, value: item.valid };
-  });
-
-  return (
-    <Stack spacing={2}>
-      <Box position="relative" width="100%" sx={{ aspectRatio: '16 / 9' }}>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
-          <polyline fill="none" stroke="var(--mui-palette-primary-main)" strokeWidth={2} points={points.join(' ')} />
-        </svg>
-      </Box>
-      <Stack direction="row" flexWrap="wrap" spacing={2} rowGap={1}>
-        {labels.map((item) => (
-          <Box key={item.label}>
-            <Typography variant="caption" color="text.secondary">
-              {item.label}
-            </Typography>
-            <Typography variant="body2">{item.value.toLocaleString()}</Typography>
-          </Box>
-        ))}
-      </Stack>
-    </Stack>
-  );
-});
-
-LineChart.displayName = 'LineChart';
-
-const CheckpointStackedBars = memo(({ data }: { data: CheckpointTotalsEntry[] }) => {
-  if (data.length === 0) {
-    return (
-      <Box py={4} display="flex" justifyContent="center">
-        <Typography variant="body2" color="text.secondary">
-          No hay asistencias registradas para los checkpoints.
-        </Typography>
-      </Box>
-    );
-  }
-
-  const maxTotal = Math.max(1, ...data.map((item) => item.valid + item.duplicate));
-
-  return (
-    <Stack spacing={2}>
-      {data.map((item) => {
-        const total = item.valid + item.duplicate;
-        const validWidth = (item.valid / maxTotal) * 100;
-        const duplicateWidth = (item.duplicate / maxTotal) * 100;
-
-        return (
-          <Stack key={item.checkpoint_id ?? item.name ?? 'unknown'} spacing={1}>
-            <Typography variant="subtitle2">{item.name ?? 'Sin checkpoint'}</Typography>
-            <Box height={16} display="flex" width="100%" sx={{ borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
-              <Box sx={{ width: `${validWidth}%`, bgcolor: 'success.main' }} title={`Válidos: ${item.valid}`} />
-              <Box sx={{ width: `${duplicateWidth}%`, bgcolor: 'warning.main' }} title={`Duplicados: ${item.duplicate}`} />
-            </Box>
-            <Typography variant="caption" color="text.secondary">
-              {`Válidos: ${item.valid.toLocaleString()} • Duplicados: ${item.duplicate.toLocaleString()} • Total: ${total.toLocaleString()}`}
-            </Typography>
-          </Stack>
-        );
-      })}
-    </Stack>
-  );
-});
-
-CheckpointStackedBars.displayName = 'CheckpointStackedBars';
-
-const RsvpDonut = memo(({ data }: { data: RsvpFunnelResponse['data'] | undefined }) => {
-  const total = (data?.invited ?? 0) + (data?.confirmed ?? 0) + (data?.declined ?? 0);
-
-  if (!data || total === 0) {
-    return (
-      <Box py={4} display="flex" justifyContent="center">
-        <Typography variant="body2" color="text.secondary">
-          No hay datos de RSVP registrados.
-        </Typography>
-      </Box>
-    );
-  }
-
-  const radius = 45;
-  const circumference = 2 * Math.PI * radius;
-  const segments: Array<{ value: number; color: string; label: string }> = [
-    { value: data.invited, color: 'var(--mui-palette-info-main)', label: 'Invitados' },
-    { value: data.confirmed, color: 'var(--mui-palette-success-main)', label: 'Confirmados' },
-    { value: data.declined, color: 'var(--mui-palette-error-main)', label: 'Rechazados' },
-  ];
-
-  let offset = 0;
-
-  const circles = segments.map((segment) => {
-    const fraction = segment.value / total;
-    const length = circumference * fraction;
-    const circle = (
-      <circle
-        key={segment.label}
-        cx="50"
-        cy="50"
-        r={radius}
-        fill="transparent"
-        stroke={segment.color}
-        strokeWidth={10}
-        strokeDasharray={`${length} ${circumference - length}`}
-        strokeDashoffset={offset}
-      />
-    );
-    offset -= length;
-    return circle;
-  });
-
-  return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems="center" justifyContent="center">
-      <Box width={200} height={200}>
-        <svg viewBox="0 0 100 100" width="100%" height="100%">
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            fill="transparent"
-            stroke="var(--mui-palette-action-disabledBackground)"
-            strokeWidth={10}
-          />
-          {circles}
-          <text x="50" y="52" textAnchor="middle" fontSize="12" fill="var(--mui-palette-text-primary)">
-            {`${Math.round(((data.confirmed ?? 0) / total) * 100)}%`}
-          </text>
-        </svg>
-      </Box>
-      <Stack spacing={1}>
-        {segments.map((segment) => (
-          <Stack direction="row" spacing={1} alignItems="center" key={segment.label}>
-            <Box sx={{ width: 12, height: 12, borderRadius: 1, bgcolor: segment.color }} />
-            <Typography variant="body2">
-              {segment.label}: {segment.value.toLocaleString()}
-            </Typography>
-          </Stack>
-        ))}
-      </Stack>
-    </Stack>
-  );
-});
-
-RsvpDonut.displayName = 'RsvpDonut';
 
 const GuestsByListTable = ({ data, isLoading }: { data: GuestsByListEntry[]; isLoading: boolean }) => {
   if (isLoading) {
@@ -364,7 +139,30 @@ const buildExportUrl = (eventId: string, filters: DashboardFiltersState, type: '
     : `/events/${eventId}/reports/summary.pdf${suffix}`;
 };
 
-const EventDashboardTab = ({ eventId }: EventDashboardTabProps) => {
+const formatNumber = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+  return value.toLocaleString('es-MX');
+};
+
+const formatPercent = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+
+  return new Intl.NumberFormat('es-MX', {
+    style: 'percent',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const EventDashboardTab = ({ eventId, eventTimezone }: EventDashboardTabProps) => {
+  const theme = useTheme();
+  const infoColor = theme.palette.info.main;
+  const successColor = theme.palette.success.main;
+  const errorColor = theme.palette.error.main;
   const { showToast } = useToast();
   const { token, tenantId } = useAuthStore((state) => ({ token: state.token, tenantId: state.tenantId }));
   const [searchParams, setSearchParams] = useSearchParams();
@@ -501,6 +299,72 @@ const EventDashboardTab = ({ eventId }: EventDashboardTabProps) => {
     );
   }, [checkpointTotalsData?.data, filters.checkpointId]);
 
+  const overviewMetrics = overviewData?.data ?? null;
+  const validAttendancesValue = overviewMetrics
+    ? filters.checkpointId
+      ? aggregatedTotals.valid
+      : overviewMetrics.attendances
+    : null;
+  const duplicateAttendancesValue = overviewMetrics
+    ? filters.checkpointId
+      ? aggregatedTotals.duplicate
+      : overviewMetrics.duplicates
+    : null;
+
+  const kpiItems = useMemo(
+    () => {
+      if (!overviewMetrics) {
+        return [] as Array<{ label: string; value: string; subvalue?: string }>;
+      }
+
+      const uniqueLabel = overviewMetrics.unique_attendees;
+      const uniqueSubvalue =
+        uniqueLabel === null || uniqueLabel === undefined
+          ? undefined
+          : `Únicos: ${formatNumber(uniqueLabel)}`;
+
+      return [
+        { label: 'Invitados', value: formatNumber(overviewMetrics.invited) },
+        { label: 'Confirmados', value: formatNumber(overviewMetrics.confirmed) },
+        {
+          label: 'Asistencias válidas',
+          value: formatNumber(validAttendancesValue),
+          subvalue: uniqueSubvalue,
+        },
+        {
+          label: 'Duplicados',
+          value: formatNumber(duplicateAttendancesValue),
+        },
+        { label: '% Ocupación', value: formatPercent(overviewMetrics.occupancy_rate) },
+      ];
+    },
+    [duplicateAttendancesValue, overviewMetrics, validAttendancesValue],
+  );
+
+  const checkpointChartData = useMemo(
+    () =>
+      filteredCheckpointTotals.map((item) => ({
+        checkpoint: item.name ?? 'Sin checkpoint',
+        valid: item.valid,
+        duplicate: item.duplicate,
+      })),
+    [filteredCheckpointTotals],
+  );
+
+  const donutData = useMemo(() => {
+    if (!rsvpData?.data) {
+      return [];
+    }
+
+    const { invited, confirmed, declined } = rsvpData.data;
+
+    return [
+      { label: 'Invitados', value: invited, color: infoColor },
+      { label: 'Confirmados', value: confirmed, color: successColor },
+      { label: 'Rechazados', value: declined, color: errorColor },
+    ];
+  }, [errorColor, infoColor, rsvpData?.data, successColor]);
+
   const handleExport = useCallback(
     async (type: 'csv' | 'pdf') => {
       const url = buildExportUrl(eventId, filters, type);
@@ -614,12 +478,14 @@ const EventDashboardTab = ({ eventId }: EventDashboardTabProps) => {
               </Grid>
             ))}
           </Grid>
-        ) : overviewData ? (
-          <KPIGrid
-            overview={overviewData.data}
-            validAttendances={filters.checkpointId ? aggregatedTotals.valid : overviewData.data.attendances}
-            duplicateAttendances={filters.checkpointId ? aggregatedTotals.duplicate : overviewData.data.duplicates}
-          />
+        ) : kpiItems.length > 0 ? (
+          <Grid container spacing={2}>
+            {kpiItems.map((item) => (
+              <Grid item xs={12} sm={6} md={4} lg={2} key={item.label}>
+                <KpiCard label={item.label} value={item.value} subvalue={item.subvalue} />
+              </Grid>
+            ))}
+          </Grid>
         ) : (
           <Alert severity="info">No se pudieron cargar los indicadores principales.</Alert>
         )}
@@ -627,11 +493,19 @@ const EventDashboardTab = ({ eventId }: EventDashboardTabProps) => {
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
-              <CardHeader title="Asistencias por hora" subheader="Registros válidos por hora del evento" sx={{ p: 0, mb: 2 }} />
+              <CardHeader
+                title="Asistencias por hora"
+                subheader="Registros válidos, duplicados y únicos por hora"
+                sx={{ p: 0, mb: 2 }}
+              />
               {isAttendanceLoading ? (
                 <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 1 }} />
               ) : (
-                <LineChart data={attendanceData?.data ?? []} />
+                <TimeSeries
+                  data={attendanceData?.data ?? []}
+                  timezone={eventTimezone}
+                  ariaLabel="Serie temporal de asistencias"
+                />
               )}
             </Paper>
           </Grid>
@@ -645,7 +519,10 @@ const EventDashboardTab = ({ eventId }: EventDashboardTabProps) => {
                   ))}
                 </Stack>
               ) : (
-                <CheckpointStackedBars data={filteredCheckpointTotals} />
+                <BarByCheckpoint
+                  data={checkpointChartData}
+                  ariaLabel="Asistencias por punto de control"
+                />
               )}
             </Paper>
           </Grid>
@@ -660,7 +537,7 @@ const EventDashboardTab = ({ eventId }: EventDashboardTabProps) => {
                   <CircularProgress />
                 </Box>
               ) : (
-                <RsvpDonut data={rsvpData?.data} />
+                <Donut data={donutData} ariaLabel="Distribución del embudo RSVP" />
               )}
             </Paper>
           </Grid>
