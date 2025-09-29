@@ -9,6 +9,7 @@ import VenueDetail from './pages/VenueDetail';
 import GuestDetail from './pages/GuestDetail';
 import Hostess from './pages/Hostess';
 import AdminAnalytics from './pages/AdminAnalytics';
+import TenantSettings from './pages/TenantSettings';
 import { RequireAuth, RequireRole } from './routes/guards';
 import Layout from './components/Layout';
 
@@ -24,6 +25,14 @@ function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route
+          path="settings"
+          element={
+            <RequireRole roles={['organizer', 'superadmin']}>
+              <TenantSettings />
+            </RequireRole>
+          }
+        />
         <Route
           path="admin/analytics"
           element={

@@ -68,6 +68,241 @@ form {
   max-width: 320px;
 }
 
+.settings-page {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.settings-section {
+  background: var(--brand-deep);
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 2rem;
+  display: grid;
+  gap: 1.75rem;
+  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.4);
+}
+
+.settings-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.branding-grid {
+  display: grid;
+  gap: 2rem;
+}
+
+@media (min-width: 960px) {
+  .branding-grid {
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.branding-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 420px;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 1.5rem;
+}
+
+.branding-form label span {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.branding-form__colors {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.branding-form input[type='color'] {
+  width: 100%;
+  height: 44px;
+  border-radius: 0.5rem;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+  cursor: pointer;
+}
+
+.branding-preview {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 1.75rem;
+  display: grid;
+  gap: 1.25rem;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.3);
+  min-height: 260px;
+}
+
+.branding-preview__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.branding-preview__badge {
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.plan-usage-grid {
+  display: grid;
+  gap: 1.75rem;
+}
+
+.plan-card {
+  background: rgba(15, 23, 42, 0.7);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 1.5rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.plan-card__label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.usage-cards {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .usage-cards {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+.usage-card {
+  background: rgba(15, 23, 42, 0.65);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 1.35rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.usage-card__label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.progress {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  background: var(--brand-sky);
+  transition: width 0.3s ease;
+}
+
+.scan-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.scan-item {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.alert-upgrade {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  background: rgba(120, 53, 15, 0.35);
+  color: #fef3c7;
+  padding: 1.25rem 1.5rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.upgrade-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  padding: 0.65rem 1.2rem;
+  border-radius: 0.6rem;
+  background: var(--brand-amber);
+  color: #0f172a;
+  text-decoration: none;
+  box-shadow: 0 12px 24px rgba(245, 158, 11, 0.35);
+}
+
+.subscription-meta {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.subscription-meta__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.subscription-invoice {
+  display: grid;
+  gap: 1rem;
+}
+
+.invoice-details {
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 1.25rem 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.invoice-details__lines {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.invoice-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.invoice-line strong {
+  color: var(--text-primary);
+}
+
+.invoice-line--total {
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding-top: 0.75rem;
+  font-size: 1.05rem;
+}
+
 label {
   display: grid;
   gap: 0.25rem;

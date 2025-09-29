@@ -23,6 +23,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\QrController;
 use App\Http\Controllers\ScanController;
 use App\Http\Controllers\TenantBrandingController;
+use App\Http\Controllers\TenantOverviewController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VenueController;
@@ -82,6 +83,7 @@ Route::middleware('api')->group(function (): void {
     Route::middleware(['auth:api', 'role:superadmin,organizer'])
         ->prefix('tenants')
         ->group(function (): void {
+            Route::get('me/overview', [TenantOverviewController::class, 'show'])->name('tenants.me.overview');
             Route::get('me/branding', [TenantBrandingController::class, 'show'])->name('tenants.me.branding.show');
             Route::patch('me/branding', [TenantBrandingController::class, 'update'])->name('tenants.me.branding.update');
         });
