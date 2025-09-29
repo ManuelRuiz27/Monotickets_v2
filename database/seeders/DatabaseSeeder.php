@@ -28,6 +28,17 @@ class DatabaseSeeder extends Seeder
             'plan' => 'pro',
             'settings_json' => [
                 'timezone' => 'UTC',
+                'branding' => [
+                    'logo_url' => 'https://demo.monotickets.test/assets/logo.png',
+                    'colors' => [
+                        'primary' => '#1F2937',
+                        'accent' => '#F59E0B',
+                        'bg' => '#FFFFFF',
+                        'text' => '#111827',
+                    ],
+                    'email_from' => 'no-reply@demo.monotickets.test',
+                    'email_reply_to' => 'support@demo.monotickets.test',
+                ],
             ],
         ]);
 
