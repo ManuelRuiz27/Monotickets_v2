@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use App\Models\Scopes\EventTenantScope;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Attendance extends Model
 {
@@ -18,6 +19,22 @@ class Attendance extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(new EventTenantScope());
+
+        static::creating(function (Attendance $attendance): void {
+            if ($attendance->tenant_id !== null) {
+                return;
+            }
+
+            if ($attendance->event_id !== null) {
+                $tenantId = DB::table('events')
+                    ->where('id', $attendance->event_id)
+                    ->value('tenant_id');
+
+                if ($tenantId !== null) {
+                    $attendance->tenant_id = $tenantId;
+                }
+            }
+        });
     }
 
     /**
@@ -25,6 +42,7 @@ class Attendance extends Model
      */
     protected $fillable = [
         'event_id',
+        'tenant_id',
         'ticket_id',
         'guest_id',
         'checkpoint_id',
@@ -67,6 +85,14 @@ class Attendance extends Model
     public function guest(): BelongsTo
     {
         return $this->belongsTo(Guest::class);
+    }
+
+    /**
+     * Tenant that owns the attendance.
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     /**

@@ -22,6 +22,7 @@ class Ticket extends Model
      */
     protected $fillable = [
         'event_id',
+        'tenant_id',
         'guest_id',
         'type',
         'price_cents',
@@ -48,6 +49,18 @@ class Ticket extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(new EventTenantScope());
+
+        static::creating(function (Ticket $ticket): void {
+            if ($ticket->tenant_id === null && $ticket->event_id !== null) {
+                $tenantId = Event::query()
+                    ->whereKey($ticket->event_id)
+                    ->value('tenant_id');
+
+                if ($tenantId !== null) {
+                    $ticket->tenant_id = $tenantId;
+                }
+            }
+        });
 
         static::deleting(function (Ticket $ticket): void {
             if ($ticket->isForceDeleting()) {
@@ -94,5 +107,13 @@ class Ticket extends Model
     public function attendances(): HasMany
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    /**
+     * Tenant associated with the ticket.
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 }

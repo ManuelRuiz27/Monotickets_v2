@@ -51,6 +51,8 @@ class EventReportController extends Controller
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
         }
 
+        $event->loadMissing(['tenant.latestSubscription.plan']);
+
         $validated = $this->validate($request, [
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
@@ -78,7 +80,9 @@ class EventReportController extends Controller
 
         $filename = sprintf('attendance-%s.csv', $event->id);
 
-        $callback = function () use ($event, $from, $to, $checkpointId): void {
+        $obfuscate = $this->shouldObfuscateSensitiveFields($event);
+
+        $callback = function () use ($event, $from, $to, $checkpointId, $obfuscate): void {
             $startedAt = microtime(true);
             $bytesWritten = 0;
             $status = 'success';
@@ -117,18 +121,28 @@ class EventReportController extends Controller
                             })
                             ->orderBy('scanned_at')
                             ->orderBy('id')
-                            ->chunk(self::CSV_CHUNK_SIZE, static function ($attendances) use ($handle, &$bytesWritten, &$status): void {
+                            ->chunk(self::CSV_CHUNK_SIZE, function ($attendances) use ($handle, &$bytesWritten, &$status, $obfuscate): void {
                                 if ($status !== 'success') {
                                     return;
                                 }
 
                                 foreach ($attendances as $attendance) {
+                                    $ticketId = $attendance->ticket_id;
+                                    $guestName = $attendance->guest?->full_name;
+                                    $hostessName = $attendance->hostess?->name;
+
+                                    if ($obfuscate) {
+                                        $ticketId = $this->maskIdentifier($ticketId);
+                                        $guestName = $this->maskName($guestName);
+                                        $hostessName = $this->maskName($hostessName);
+                                    }
+
                                     $written = fputcsv($handle, [
                                         optional($attendance->scanned_at)->toISOString(),
                                         $attendance->checkpoint?->name,
-                                        $attendance->ticket_id,
-                                        $attendance->guest?->full_name,
-                                        $attendance->hostess?->name,
+                                        $ticketId,
+                                        $guestName,
+                                        $hostessName,
                                         $attendance->result,
                                     ]);
 
@@ -500,5 +514,86 @@ class EventReportController extends Controller
         }
 
         return [$from, $to];
+    }
+
+    private function shouldObfuscateSensitiveFields(Event $event): bool
+    {
+        $tenant = $event->tenant;
+
+        if ($tenant === null) {
+            return false;
+        }
+
+        $settings = $tenant->settings_json;
+
+        if (is_array($settings)) {
+            $override = Arr::get($settings, 'privacy.allow_pii_exports');
+
+            if (is_bool($override)) {
+                return ! $override;
+            }
+        }
+
+        $subscription = $tenant->latestSubscription;
+
+        if ($subscription === null) {
+            $subscription = $tenant->activeSubscription();
+        }
+
+        $plan = $subscription?->plan;
+
+        if ($plan === null) {
+            return false;
+        }
+
+        $features = is_array($plan->features_json) ? $plan->features_json : [];
+
+        return ! (bool) Arr::get($features, 'exports.pii', true);
+    }
+
+    private function maskIdentifier(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        if ($trimmed === '') {
+            return $value;
+        }
+
+        $length = mb_strlen($trimmed);
+
+        if ($length <= 4) {
+            return str_repeat('•', $length);
+        }
+
+        return Str::substr($trimmed, 0, 2) . str_repeat('•', $length - 4) . Str::substr($trimmed, -2);
+    }
+
+    private function maskName(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        if ($trimmed === '') {
+            return $value;
+        }
+
+        $parts = preg_split('/\s+/', $trimmed) ?: [];
+
+        if ($parts === []) {
+            return Str::upper(Str::substr($trimmed, 0, 1)) . '.';
+        }
+
+        $initials = array_map(static function (string $part): string {
+            return Str::upper(Str::substr($part, 0, 1)) . '.';
+        }, $parts);
+
+        return implode(' ', $initials);
     }
 }

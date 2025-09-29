@@ -10,6 +10,7 @@ use App\Models\UsageCounter;
 use App\Services\UsageService;
 use App\Support\ApiResponse;
 use App\Support\TenantContext;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -62,7 +63,14 @@ class EnforceLimits
 
         $usage = $this->usageService->currentValue($tenant, UsageCounter::KEY_EVENT_COUNT);
 
+        $this->notifyLimitThreshold($tenant, 'events', $usage, $limit);
+
         if ($limit <= 0 || $usage >= $limit) {
+            $this->logLimitExceededMetric($tenant, 'events', [
+                'usage' => $usage,
+                'limit' => $limit,
+            ]);
+
             return $this->limitExceededResponse(
                 'You have reached the maximum number of active events allowed by your plan. Please upgrade to add more events.',
                 [
@@ -103,7 +111,14 @@ class EnforceLimits
 
         $usage = $this->usageService->currentValue($tenant, UsageCounter::KEY_USER_COUNT);
 
+        $this->notifyLimitThreshold($tenant, 'users', $usage, $limit);
+
         if ($limit <= 0 || $usage >= $limit) {
+            $this->logLimitExceededMetric($tenant, 'users', [
+                'usage' => $usage,
+                'limit' => $limit,
+            ]);
+
             return $this->limitExceededResponse(
                 'You have reached the maximum number of active users allowed by your plan. Please upgrade to add more team members.',
                 [
@@ -150,9 +165,17 @@ class EnforceLimits
             ['event_id' => $eventId]
         );
 
+        $this->notifyLimitThreshold($tenant, 'scans', $usage, $limit);
+
         if ($limit > 0 && $usage < $limit) {
             return $next($request);
         }
+
+        $this->logLimitExceededMetric($tenant, 'scans', [
+            'usage' => $usage,
+            'limit' => $limit,
+            'event_id' => $eventId,
+        ]);
 
         Log::warning('limits.scan_exceeded', [
             'tenant_id' => (string) $tenant->id,
@@ -355,5 +378,100 @@ class EnforceLimits
     private function limitExceededResponse(string $message, array $details, int $status): JsonResponse
     {
         return ApiResponse::error('LIMIT_EXCEEDED', $message, $details, $status);
+    }
+
+    private function logLimitExceededMetric(Tenant $tenant, string $resource, array $context = []): void
+    {
+        Log::info('metrics.counter', array_merge([
+            'metric' => 'limit_exceeded_events',
+            'tenant_id' => (string) $tenant->id,
+            'resource' => $resource,
+        ], $context));
+    }
+
+    private function notifyLimitThreshold(Tenant $tenant, string $resource, int $usage, ?int $limit): void
+    {
+        if ($limit === null || $limit <= 0) {
+            return;
+        }
+
+        $thresholdRatio = (float) config('tenancy.limit_warning_threshold', 0.9);
+        $thresholdValue = (int) ceil($limit * $thresholdRatio);
+
+        if ($usage < $thresholdValue) {
+            return;
+        }
+
+        $settings = $tenant->settings_json;
+
+        if (! is_array($settings)) {
+            $settings = [];
+        }
+
+        $alerts = Arr::get($settings, 'alerts.limits', []);
+
+        if (! is_array($alerts)) {
+            $alerts = [];
+        }
+
+        $periodKey = CarbonImmutable::now()->format('Y-m');
+        $lastPeriod = $alerts[$resource]['period'] ?? null;
+
+        if ($lastPeriod === $periodKey) {
+            return;
+        }
+
+        $owner = $tenant->users()->orderBy('created_at')->first();
+        $webhookUrl = Arr::get($settings, 'alerts.webhook_url');
+
+        Log::notice('limits.threshold_warning', [
+            'tenant_id' => (string) $tenant->id,
+            'resource' => $resource,
+            'usage' => $usage,
+            'limit' => $limit,
+            'threshold_ratio' => $thresholdRatio,
+            'owner_id' => $owner?->id,
+            'owner_email' => $owner?->email,
+            'webhook_url' => $webhookUrl,
+        ]);
+
+        if ($owner !== null) {
+            Log::info('notifications.sent', [
+                'channel' => 'email',
+                'tenant_id' => (string) $tenant->id,
+                'recipient' => $owner->email,
+                'template' => 'limit_threshold',
+                'resource' => $resource,
+                'usage' => $usage,
+                'limit' => $limit,
+            ]);
+        }
+
+        if (is_string($webhookUrl) && $webhookUrl !== '') {
+            Log::info('notifications.webhook_dispatched', [
+                'tenant_id' => (string) $tenant->id,
+                'resource' => $resource,
+                'webhook_url' => $webhookUrl,
+                'payload' => [
+                    'usage' => $usage,
+                    'limit' => $limit,
+                    'threshold_ratio' => $thresholdRatio,
+                ],
+            ]);
+        }
+
+        $alerts[$resource] = [
+            'period' => $periodKey,
+            'last_notified_at' => CarbonImmutable::now()->toIso8601String(),
+            'usage' => $usage,
+        ];
+
+        Arr::set($settings, 'alerts.limits', $alerts);
+
+        $tenant->settings_json = $settings;
+
+        if ($tenant->isDirty('settings_json')) {
+            $tenant->save();
+        }
     }
 }

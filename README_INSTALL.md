@@ -171,6 +171,28 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
   docker compose down
   ```
 
+## Tareas programadas y mantenimiento
+
+Las siguientes tareas automatizan procesos de facturación y cumplimiento. En entornos con Docker puedes ejecutarlas manualmente o habilitar el *scheduler* de Laravel.
+
+- **Cerrar periodos de facturación:**
+  ```bash
+  docker compose exec app php artisan billing:close-periods
+  ```
+  Lanza trabajos en segundo plano con reintentos exponenciales para generar facturas y registrar la auditoría correspondiente.
+
+- **Anonimizar tenants cancelados:**
+  ```bash
+  docker compose exec app php artisan tenants:anonymize-canceled
+  ```
+  Programa la anonimización de datos sensibles una vez superado el periodo de retención configurado (`TENANCY_ANONYMIZE_AFTER_DAYS`).
+
+- **Ejecutar el scheduler en modo continuo:**
+  ```bash
+  docker compose exec app php artisan schedule:work
+  ```
+  Esto garantiza que los cierres mensuales y la anonimización diaria se ejecuten automáticamente dentro del contenedor.
+
 ---
 
 ## Notas finales

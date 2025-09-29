@@ -14,11 +14,27 @@ class ImportRow extends Model
     use HasUuids;
     use SoftDeletes;
 
+    protected static function booted(): void
+    {
+        static::creating(function (ImportRow $row): void {
+            if ($row->tenant_id === null && $row->import_id !== null) {
+                $tenantId = Import::query()
+                    ->whereKey($row->import_id)
+                    ->value('tenant_id');
+
+                if ($tenantId !== null) {
+                    $row->tenant_id = $tenantId;
+                }
+            }
+        });
+    }
+
     /**
      * @var array<int, string>
      */
     protected $fillable = [
         'import_id',
+        'tenant_id',
         'row_num',
         'data_json',
         'status',
@@ -40,5 +56,13 @@ class ImportRow extends Model
     public function import(): BelongsTo
     {
         return $this->belongsTo(Import::class);
+    }
+
+    /**
+     * Tenant associated with the import row.
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 }
