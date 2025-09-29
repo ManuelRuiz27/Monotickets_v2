@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\AttendanceCreated;
 use App\Http\Controllers\Concerns\InteractsWithTenants;
 use App\Models\Attendance;
 use App\Models\Checkpoint;
@@ -547,7 +548,7 @@ class ScanController extends Controller
         array $metadata,
         float $startedAt
     ): array {
-        return $this->db->transaction(function () use (
+        $outcome = $this->db->transaction(function () use (
             $request,
             $authUser,
             $ticket,
@@ -661,15 +662,31 @@ class ScanController extends Controller
             );
 
             return [
-                'result' => $result,
-                'message' => $message,
-                'reason' => $metadata['reason'] ?? null,
-                'qr_code' => $qr->code,
-                'ticket' => $this->formatTicket($ticket->fresh(['guest', 'event'])),
-                'attendance' => $this->formatAttendance($attendance->fresh(['checkpoint'])),
-                'last_validated_at' => $metadata['last_validated_at'] ?? null,
+                'payload' => [
+                    'result' => $result,
+                    'message' => $message,
+                    'reason' => $metadata['reason'] ?? null,
+                    'qr_code' => $qr->code,
+                    'ticket' => $this->formatTicket($ticket->fresh(['guest', 'event'])),
+                    'attendance' => $this->formatAttendance($attendance->fresh(['checkpoint'])),
+                    'last_validated_at' => $metadata['last_validated_at'] ?? null,
+                ],
+                'attendance' => $attendance,
             ];
         });
+
+        /** @var Attendance $createdAttendance */
+        $createdAttendance = $outcome['attendance'];
+
+        event(new AttendanceCreated((string) $event->id, (string) $createdAttendance->id, (string) $event->tenant_id));
+
+        event('attendance.created', [
+            'event_id' => (string) $event->id,
+            'attendance_id' => (string) $createdAttendance->id,
+            'tenant_id' => (string) $event->tenant_id,
+        ]);
+
+        return $outcome['payload'];
     }
 
     /**

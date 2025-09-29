@@ -53,5 +53,16 @@ class RouteServiceProvider extends ServiceProvider
 
             return Limit::perSecond(max(1, $rate))->by(Str::lower($identifier));
         });
+
+        RateLimiter::for('reports-export', function (Request $request): Limit {
+            $user = $request->user();
+            $identifier = $user?->getAuthIdentifier();
+
+            $key = $identifier !== null
+                ? sprintf('user:%s', $identifier)
+                : sprintf('ip:%s', $request->ip());
+
+            return Limit::perMinute(1)->by(Str::lower((string) $key));
+        });
     }
 }
