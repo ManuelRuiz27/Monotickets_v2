@@ -7,13 +7,18 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Billing\BillingService;
 use App\Services\Billing\Exceptions\BillingPeriodAlreadyClosedException;
 use App\Support\ApiResponse;
 use Carbon\CarbonImmutable;
+use Dompdf\Dompdf;
+use Dompdf\Options;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -23,6 +28,83 @@ class BillingController extends Controller
 
     public function __construct(private readonly BillingService $billingService)
     {
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $tenantId = $this->resolveTenantContext($request, $user);
+
+        if ($tenantId === null && ! $this->isSuperAdmin($user)) {
+            $this->throwValidationException([
+                'tenant_id' => ['Tenant context is required to list invoices.'],
+            ]);
+        }
+
+        $invoices = $this->invoiceQuery($user, $tenantId)
+            ->orderByDesc('issued_at')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json([
+            'data' => $invoices->map(fn (Invoice $invoice): array => $this->formatInvoiceSummary($invoice))->all(),
+            'meta' => [
+                'can_export_pdf' => $this->canExportInvoicePdf($tenantId),
+            ],
+        ]);
+    }
+
+    public function show(Request $request, string $invoiceId): JsonResponse
+    {
+        [$invoice] = $this->resolveInvoice($request, $invoiceId);
+
+        if ($invoice === null) {
+            return ApiResponse::error('invoice_not_found', 'The invoice could not be found for the current context.', null, Response::HTTP_NOT_FOUND);
+        }
+
+        return response()->json([
+            'data' => $this->formatInvoice($invoice),
+        ]);
+    }
+
+    public function downloadPdf(Request $request, string $invoiceId)
+    {
+        [$invoice, $tenantId] = $this->resolveInvoice($request, $invoiceId, ['payments', 'tenant.latestSubscription.plan']);
+
+        if ($invoice === null) {
+            return ApiResponse::error('invoice_not_found', 'The invoice could not be found for the current context.', null, Response::HTTP_NOT_FOUND);
+        }
+
+        $tenant = $invoice->tenant;
+
+        if ($tenantId === null && $tenant !== null) {
+            $tenantId = (string) $tenant->id;
+        }
+
+        if ($tenantId !== null && ! $this->canExportInvoicePdf($tenantId)) {
+            return ApiResponse::error('FEATURE_NOT_AVAILABLE', 'Your current plan does not include PDF export capabilities.', ['feature' => 'exports.pdf'], Response::HTTP_FORBIDDEN);
+        }
+
+        $options = new Options();
+        $options->set('defaultFont', 'helvetica');
+        $options->set('isRemoteEnabled', true);
+
+        $dompdf = new Dompdf($options);
+        $html = view('billing.invoice_pdf', [
+            'invoice' => $invoice,
+            'tenant' => $tenant,
+        ])->render();
+
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('a4', 'portrait');
+        $dompdf->render();
+
+        $filename = sprintf('invoice-%s.pdf', $invoice->id);
+
+        return response($dompdf->output(), Response::HTTP_OK, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
     }
 
     public function preview(Request $request): JsonResponse
@@ -122,25 +204,7 @@ class BillingController extends Controller
 
     public function pay(Request $request, string $invoiceId): JsonResponse
     {
-        $user = $request->user();
-        $tenantId = $this->resolveTenantContext($request, $user);
-
-        if ($tenantId === null && ! $this->isSuperAdmin($user)) {
-            $this->throwValidationException([
-                'tenant_id' => ['Tenant context is required to pay invoices.'],
-            ]);
-        }
-
-        $query = Invoice::query()->with('payments')->where('id', $invoiceId);
-
-        if (! $this->isSuperAdmin($user)) {
-            $query->where('tenant_id', $tenantId);
-        } elseif ($tenantId !== null) {
-            $query->where('tenant_id', $tenantId);
-        }
-
-        /** @var Invoice|null $invoice */
-        $invoice = $query->first();
+        [$invoice] = $this->resolveInvoice($request, $invoiceId);
 
         if ($invoice === null) {
             return ApiResponse::error('invoice_not_found', 'The invoice could not be found for the current context.', null, Response::HTTP_NOT_FOUND);
@@ -176,6 +240,94 @@ class BillingController extends Controller
         return response()->json([
             'data' => $this->formatInvoice($invoice),
         ]);
+    }
+
+    private function formatInvoiceSummary(Invoice $invoice): array
+    {
+        return [
+            'id' => (string) $invoice->id,
+            'tenant_id' => (string) $invoice->tenant_id,
+            'status' => $invoice->status,
+            'period_start' => $invoice->period_start?->toIso8601String(),
+            'period_end' => $invoice->period_end?->toIso8601String(),
+            'issued_at' => $invoice->issued_at?->toIso8601String(),
+            'due_at' => $invoice->due_at?->toIso8601String(),
+            'paid_at' => $invoice->paid_at?->toIso8601String(),
+            'total_cents' => (int) $invoice->total_cents,
+        ];
+    }
+
+    /**
+     * @param array<int, string> $with
+     * @return array{0: ?Invoice, 1: ?string, 2: User}
+     */
+    private function resolveInvoice(Request $request, string $invoiceId, array $with = ['payments']): array
+    {
+        $user = $request->user();
+        $tenantId = $this->resolveTenantContext($request, $user);
+
+        if ($tenantId === null && ! $this->isSuperAdmin($user)) {
+            $this->throwValidationException([
+                'tenant_id' => ['Tenant context is required to access invoices.'],
+            ]);
+        }
+
+        $query = $this->invoiceQuery($user, $tenantId)->where('id', $invoiceId);
+
+        if (! empty($with)) {
+            $query->with($with);
+        }
+
+        /** @var Invoice|null $invoice */
+        $invoice = $query->first();
+
+        return [$invoice, $tenantId, $user];
+    }
+
+    /**
+     * @return Builder<Invoice>
+     */
+    private function invoiceQuery(User $user, ?string $tenantId): Builder
+    {
+        $query = Invoice::query();
+
+        if (! $this->isSuperAdmin($user)) {
+            $query->where('tenant_id', $tenantId);
+        } elseif ($tenantId !== null) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        return $query;
+    }
+
+    private function canExportInvoicePdf(?string $tenantId): bool
+    {
+        if ($tenantId === null) {
+            return true;
+        }
+
+        /** @var Tenant|null $tenant */
+        $tenant = Tenant::query()->find($tenantId);
+
+        if ($tenant === null) {
+            return false;
+        }
+
+        $subscription = $tenant->activeSubscription();
+
+        if ($subscription === null) {
+            return false;
+        }
+
+        $plan = $subscription->plan;
+
+        if ($plan === null) {
+            return false;
+        }
+
+        $features = is_array($plan->features_json) ? $plan->features_json : [];
+
+        return (bool) Arr::get($features, 'exports.pdf', true);
     }
 
     /**

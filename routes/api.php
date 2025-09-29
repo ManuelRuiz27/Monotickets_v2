@@ -212,6 +212,11 @@ Route::middleware('api')->group(function (): void {
     Route::middleware(['auth:api', 'role:superadmin,tenant_owner'])
         ->prefix('billing')
         ->group(function (): void {
+            Route::get('invoices', [BillingController::class, 'index'])->name('billing.invoices.index');
+            Route::get('invoices/{invoiceId}', [BillingController::class, 'show'])->name('billing.invoices.show');
+            Route::get('invoices/{invoiceId}/pdf', [BillingController::class, 'downloadPdf'])
+                ->middleware(['throttle:reports-export', 'limits:export,pdf'])
+                ->name('billing.invoices.pdf');
             Route::post('preview', [BillingController::class, 'preview'])->name('billing.preview');
             Route::post('invoices/close', [BillingController::class, 'close'])->name('billing.invoices.close');
             Route::post('invoices/{invoiceId}/pay', [BillingController::class, 'pay'])->name('billing.invoices.pay');
