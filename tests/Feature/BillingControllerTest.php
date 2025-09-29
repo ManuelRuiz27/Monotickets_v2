@@ -140,7 +140,7 @@ class BillingControllerTest extends TestCase
 
         $owner = $this->createTenantOwner($tenant);
 
-        $response = $this->actingAs($owner, 'api')->postJson('/billing/invoices/close', [], [
+        $response = $this->actingAs($owner, 'api')->patchJson('/billing/invoices/close', [], [
             'X-Tenant-ID' => $tenant->id,
         ]);
 
@@ -233,7 +233,7 @@ class BillingControllerTest extends TestCase
 
         $owner = $this->createTenantOwner($tenant);
 
-        $response = $this->actingAs($owner, 'api')->postJson('/billing/invoices/close', [], [
+        $response = $this->actingAs($owner, 'api')->patchJson('/billing/invoices/close', [], [
             'X-Tenant-ID' => $tenant->id,
         ]);
 
@@ -287,13 +287,13 @@ class BillingControllerTest extends TestCase
 
         $owner = $this->createTenantOwner($tenant);
 
-        $this->actingAs($owner, 'api')->postJson('/billing/invoices/close', [], [
+        $this->actingAs($owner, 'api')->patchJson('/billing/invoices/close', [], [
             'X-Tenant-ID' => $tenant->id,
         ])->assertCreated();
 
         $invoice = Invoice::query()->firstOrFail();
 
-        $response = $this->actingAs($owner, 'api')->postJson('/billing/invoices/close', [], [
+        $response = $this->actingAs($owner, 'api')->patchJson('/billing/invoices/close', [], [
             'X-Tenant-ID' => $tenant->id,
         ]);
 
@@ -338,13 +338,13 @@ class BillingControllerTest extends TestCase
 
         $owner = $this->createTenantOwner($tenant);
 
-        $this->actingAs($owner, 'api')->postJson('/billing/invoices/close', [], [
+        $this->actingAs($owner, 'api')->patchJson('/billing/invoices/close', [], [
             'X-Tenant-ID' => $tenant->id,
         ])->assertCreated();
 
         $invoice = Invoice::query()->firstOrFail();
 
-        $response = $this->actingAs($owner, 'api')->postJson(
+        $response = $this->actingAs($owner, 'api')->patchJson(
             sprintf('/billing/invoices/%s/pay', $invoice->id),
             [],
             ['X-Tenant-ID' => $tenant->id]

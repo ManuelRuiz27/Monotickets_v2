@@ -62,6 +62,20 @@ class UserManagementTest extends TestCase
         $response->assertJsonPath('meta.total', 3);
     }
 
+    public function test_users_index_returns_empty_page_when_page_exceeds_last_page(): void
+    {
+        $superAdmin = $this->createSuperAdmin();
+
+        User::factory()->count(2)->create();
+
+        $response = $this->actingAs($superAdmin, 'api')->getJson('/users?page=5&per_page=1');
+
+        $response->assertOk();
+        $response->assertJsonCount(0, 'data');
+        $this->assertSame([], $response->json('data'));
+        $this->assertLessThan(5, $response->json('meta.total_pages'));
+    }
+
     public function test_superadmin_impersonates_tenant_to_list_users(): void
     {
         $tenantA = Tenant::factory()->create();

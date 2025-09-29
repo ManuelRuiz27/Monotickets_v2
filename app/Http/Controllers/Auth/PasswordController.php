@@ -57,7 +57,6 @@ class PasswordController extends Controller
 
         Log::info('Password reset requested.', [
             'email' => $email,
-            'token' => $token,
         ]);
 
         return response()->json([
@@ -76,6 +75,16 @@ class PasswordController extends Controller
 
         if (! $record || ! Hash::check($data['token'], $record->token)) {
             return $this->unauthorizedResponse('Invalid password reset token.');
+        }
+
+        $expiresInMinutes = (int) config('auth.password_reset_expiration_minutes', 60);
+
+        if ($record->created_at === null
+            || CarbonImmutable::parse($record->created_at)->addMinutes($expiresInMinutes)->isPast()
+        ) {
+            DB::table('password_resets')->where('email', $data['email'])->delete();
+
+            return $this->unauthorizedResponse('Password reset token has expired.');
         }
 
         /** @var User|null $user */

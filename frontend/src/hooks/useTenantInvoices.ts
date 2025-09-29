@@ -69,7 +69,7 @@ export function useTenantInvoice(invoiceId?: string) {
 
 export async function payInvoice(invoiceId: string): Promise<InvoiceDetail> {
   const response = await apiFetch<InvoiceDetailResponse>(`/billing/invoices/${invoiceId}/pay`, {
-    method: 'POST',
+    method: 'PATCH',
   });
 
   return response.data;

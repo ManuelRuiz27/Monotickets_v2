@@ -30,8 +30,9 @@ class VenueController extends Controller
     /**
      * Display a paginated listing of venues for the given event.
      */
-    public function index(VenueIndexRequest $request, string $eventId): JsonResponse
+    public function index(VenueIndexRequest $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -62,8 +63,9 @@ class VenueController extends Controller
     /**
      * Store a newly created venue for the event.
      */
-    public function store(VenueStoreRequest $request, string $eventId): JsonResponse
+    public function store(VenueStoreRequest $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -119,8 +121,10 @@ class VenueController extends Controller
     /**
      * Display the specified venue.
      */
-    public function show(Request $request, string $eventId, string $venueId): JsonResponse
+    public function show(Request $request, string $event_id, string $venue_id): JsonResponse
     {
+        $eventId = $event_id;
+        $venueId = $venue_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -143,8 +147,10 @@ class VenueController extends Controller
     /**
      * Update the specified venue for the event.
      */
-    public function update(VenueUpdateRequest $request, string $eventId, string $venueId): JsonResponse
+    public function update(VenueUpdateRequest $request, string $event_id, string $venue_id): JsonResponse
     {
+        $eventId = $event_id;
+        $venueId = $venue_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -199,8 +205,10 @@ class VenueController extends Controller
     /**
      * Remove the specified venue from storage.
      */
-    public function destroy(Request $request, string $eventId, string $venueId): JsonResponse
+    public function destroy(Request $request, string $event_id, string $venue_id): JsonResponse
     {
+        $eventId = $event_id;
+        $venueId = $venue_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -281,8 +289,9 @@ class VenueController extends Controller
     /**
      * Locate an event ensuring tenant constraints.
      */
-    private function locateEvent(Request $request, User $authUser, string $eventId): ?Event
+    private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
+        $eventId = $event_id;
         $query = Event::query()->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

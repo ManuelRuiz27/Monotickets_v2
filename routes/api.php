@@ -97,9 +97,9 @@ Route::middleware('api')->group(function (): void {
             Route::post('/', [EventController::class, 'store'])
                 ->middleware('limits:event.create')
                 ->name('events.store');
-            Route::get('{eventId}', [EventController::class, 'show'])->name('events.show');
-            Route::patch('{eventId}', [EventController::class, 'update'])->name('events.update');
-            Route::delete('{eventId}', [EventController::class, 'destroy'])->name('events.destroy');
+            Route::get('{event_id}', [EventController::class, 'show'])->name('events.show');
+            Route::patch('{event_id}', [EventController::class, 'update'])->name('events.update');
+            Route::delete('{event_id}', [EventController::class, 'destroy'])->name('events.destroy');
 
             Route::get('{event_id}/guest-lists', [GuestListController::class, 'index'])->name('events.guest-lists.index');
             Route::post('{event_id}/guest-lists', [GuestListController::class, 'store'])->name('events.guest-lists.store');
@@ -126,21 +126,21 @@ Route::middleware('api')->group(function (): void {
 
             Route::post('{event_id}/imports', [ImportController::class, 'store'])->name('events.imports.store');
 
-            Route::get('{eventId}/venues', [VenueController::class, 'index'])->name('events.venues.index');
-            Route::post('{eventId}/venues', [VenueController::class, 'store'])->name('events.venues.store');
-            Route::get('{eventId}/venues/{venueId}', [VenueController::class, 'show'])->name('events.venues.show');
-            Route::patch('{eventId}/venues/{venueId}', [VenueController::class, 'update'])->name('events.venues.update');
-            Route::delete('{eventId}/venues/{venueId}', [VenueController::class, 'destroy'])->name('events.venues.destroy');
+            Route::get('{event_id}/venues', [VenueController::class, 'index'])->name('events.venues.index');
+            Route::post('{event_id}/venues', [VenueController::class, 'store'])->name('events.venues.store');
+            Route::get('{event_id}/venues/{venue_id}', [VenueController::class, 'show'])->name('events.venues.show');
+            Route::patch('{event_id}/venues/{venue_id}', [VenueController::class, 'update'])->name('events.venues.update');
+            Route::delete('{event_id}/venues/{venue_id}', [VenueController::class, 'destroy'])->name('events.venues.destroy');
 
-            Route::get('{eventId}/venues/{venueId}/checkpoints', [CheckpointController::class, 'index'])
+            Route::get('{event_id}/venues/{venue_id}/checkpoints', [CheckpointController::class, 'index'])
                 ->name('events.venues.checkpoints.index');
-            Route::post('{eventId}/venues/{venueId}/checkpoints', [CheckpointController::class, 'store'])
+            Route::post('{event_id}/venues/{venue_id}/checkpoints', [CheckpointController::class, 'store'])
                 ->name('events.venues.checkpoints.store');
-            Route::get('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'show'])
+            Route::get('{event_id}/venues/{venue_id}/checkpoints/{checkpoint_id}', [CheckpointController::class, 'show'])
                 ->name('events.venues.checkpoints.show');
-            Route::patch('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'update'])
+            Route::patch('{event_id}/venues/{venue_id}/checkpoints/{checkpoint_id}', [CheckpointController::class, 'update'])
                 ->name('events.venues.checkpoints.update');
-            Route::delete('{eventId}/venues/{venueId}/checkpoints/{checkpointId}', [CheckpointController::class, 'destroy'])
+            Route::delete('{event_id}/venues/{venue_id}/checkpoints/{checkpoint_id}', [CheckpointController::class, 'destroy'])
                 ->name('events.venues.checkpoints.destroy');
         });
 
@@ -165,9 +165,9 @@ Route::middleware('api')->group(function (): void {
     Route::middleware(['auth:api', 'role:superadmin,organizer'])
         ->prefix('guest-lists')
         ->group(function (): void {
-            Route::get('{id}', [GuestListController::class, 'show'])->name('guest-lists.show');
-            Route::patch('{id}', [GuestListController::class, 'update'])->name('guest-lists.update');
-            Route::delete('{id}', [GuestListController::class, 'destroy'])->name('guest-lists.destroy');
+            Route::get('{guest_list_id}', [GuestListController::class, 'show'])->name('guest-lists.show');
+            Route::patch('{guest_list_id}', [GuestListController::class, 'update'])->name('guest-lists.update');
+            Route::delete('{guest_list_id}', [GuestListController::class, 'destroy'])->name('guest-lists.destroy');
         });
 
     Route::middleware(['auth:api', 'role:superadmin,organizer'])
@@ -185,9 +185,9 @@ Route::middleware('api')->group(function (): void {
         ->group(function (): void {
             Route::get('/', [HostessAssignmentController::class, 'index'])->name('hostess-assignments.index');
             Route::post('/', [HostessAssignmentController::class, 'store'])->name('hostess-assignments.store');
-            Route::get('{assignmentId}', [HostessAssignmentController::class, 'show'])->name('hostess-assignments.show');
-            Route::patch('{assignmentId}', [HostessAssignmentController::class, 'update'])->name('hostess-assignments.update');
-            Route::delete('{assignmentId}', [HostessAssignmentController::class, 'destroy'])->name('hostess-assignments.destroy');
+            Route::get('{assignment_id}', [HostessAssignmentController::class, 'show'])->name('hostess-assignments.show');
+            Route::patch('{assignment_id}', [HostessAssignmentController::class, 'update'])->name('hostess-assignments.update');
+            Route::delete('{assignment_id}', [HostessAssignmentController::class, 'destroy'])->name('hostess-assignments.destroy');
         });
 
     Route::middleware(['auth:api', 'role:superadmin,organizer'])
@@ -213,12 +213,12 @@ Route::middleware('api')->group(function (): void {
         ->prefix('billing')
         ->group(function (): void {
             Route::get('invoices', [BillingController::class, 'index'])->name('billing.invoices.index');
-            Route::get('invoices/{invoiceId}', [BillingController::class, 'show'])->name('billing.invoices.show');
-            Route::get('invoices/{invoiceId}/pdf', [BillingController::class, 'downloadPdf'])
+            Route::get('invoices/{invoice_id}', [BillingController::class, 'show'])->name('billing.invoices.show');
+            Route::get('invoices/{invoice_id}/pdf', [BillingController::class, 'downloadPdf'])
                 ->middleware(['throttle:reports-export', 'limits:export,pdf'])
                 ->name('billing.invoices.pdf');
             Route::post('preview', [BillingController::class, 'preview'])->name('billing.preview');
-            Route::post('invoices/close', [BillingController::class, 'close'])->name('billing.invoices.close');
-            Route::post('invoices/{invoiceId}/pay', [BillingController::class, 'pay'])->name('billing.invoices.pay');
+            Route::patch('invoices/close', [BillingController::class, 'close'])->name('billing.invoices.close');
+            Route::patch('invoices/{invoice_id}/pay', [BillingController::class, 'pay'])->name('billing.invoices.pay');
         });
 });

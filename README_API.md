@@ -195,6 +195,12 @@ Content-Type: application/json
 }
 ```
 
+## Cambios de compatibilidad
+
+- Los identificadores de ruta ahora utilizan `snake_case` (por ejemplo, `event_id`, `venue_id`, `invoice_id`). Actualiza cualquier integración que construya URLs manualmente.
+- Los endpoints de facturación para cerrar y pagar facturas (`/billing/invoices/close`, `/billing/invoices/{invoice_id}/pay`) ahora requieren el método `PATCH`.
+- La expiración de los tokens de restablecimiento de contraseña es configurable mediante la variable de entorno `PASSWORD_RESET_EXPIRATION_MINUTES` (por defecto 60 minutos).
+
 ### Ver usuario
 
 ```http

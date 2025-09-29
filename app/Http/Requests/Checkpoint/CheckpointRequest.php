@@ -27,8 +27,8 @@ abstract class CheckpointRequest extends ApiFormRequest
         $this->providedEventId = $this->has('event_id') ? (string) $this->input('event_id') : null;
         $this->providedVenueId = $this->has('venue_id') ? (string) $this->input('venue_id') : null;
 
-        $routeEventId = $this->route('eventId');
-        $routeVenueId = $this->route('venueId');
+        $routeEventId = $this->route('event_id');
+        $routeVenueId = $this->route('venue_id');
 
         if ($routeEventId !== null && $routeEventId !== '') {
             $this->resolvedEventId = (string) $routeEventId;

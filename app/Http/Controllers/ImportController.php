@@ -26,8 +26,9 @@ class ImportController extends Controller
     /**
      * Queue an import for the provided event.
      */
-    public function store(ImportStoreRequest $request, string $eventId): JsonResponse
+    public function store(ImportStoreRequest $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -77,8 +78,9 @@ class ImportController extends Controller
     /**
      * Display import status details.
      */
-    public function show(Request $request, string $importId): JsonResponse
+    public function show(Request $request, string $import_id): JsonResponse
     {
+        $importId = $import_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $import = $this->locateImport($request, $authUser, $importId);
@@ -95,8 +97,9 @@ class ImportController extends Controller
     /**
      * List processed rows for the import.
      */
-    public function rows(ImportRowIndexRequest $request, string $importId): JsonResponse
+    public function rows(ImportRowIndexRequest $request, string $import_id): JsonResponse
     {
+        $importId = $import_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $import = $this->locateImport($request, $authUser, $importId);
@@ -127,8 +130,9 @@ class ImportController extends Controller
     /**
      * Locate event ensuring tenant restrictions.
      */
-    private function locateEvent(Request $request, User $authUser, string $eventId): ?Event
+    private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
+        $eventId = $event_id;
         $query = Event::query()->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 
@@ -152,8 +156,9 @@ class ImportController extends Controller
     /**
      * Locate import ensuring tenant constraints.
      */
-    private function locateImport(Request $request, User $authUser, string $importId): ?Import
+    private function locateImport(Request $request, User $authUser, string $import_id): ?Import
     {
+        $importId = $import_id;
         $query = Import::query()->with('event')->whereKey($importId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

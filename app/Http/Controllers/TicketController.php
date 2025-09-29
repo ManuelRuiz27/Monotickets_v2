@@ -166,8 +166,9 @@ class TicketController extends Controller
     /**
      * Display a specific ticket.
      */
-    public function show(Request $request, string $ticketId): JsonResponse
+    public function show(Request $request, string $ticket_id): JsonResponse
     {
+        $ticketId = $ticket_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $ticket = $this->locateTicket($request, $authUser, $ticketId);
@@ -184,8 +185,9 @@ class TicketController extends Controller
     /**
      * Update an existing ticket.
      */
-    public function update(TicketUpdateRequest $request, string $ticketId): JsonResponse
+    public function update(TicketUpdateRequest $request, string $ticket_id): JsonResponse
     {
+        $ticketId = $ticket_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $ticket = $this->locateTicket($request, $authUser, $ticketId);
@@ -313,8 +315,9 @@ class TicketController extends Controller
     /**
      * Soft delete a ticket.
      */
-    public function destroy(Request $request, string $ticketId): JsonResponse
+    public function destroy(Request $request, string $ticket_id): JsonResponse
     {
+        $ticketId = $ticket_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $ticket = $this->locateTicket($request, $authUser, $ticketId);
@@ -440,8 +443,9 @@ class TicketController extends Controller
     /**
      * Locate a ticket ensuring tenant constraints.
      */
-    private function locateTicket(Request $request, User $authUser, string $ticketId): ?Ticket
+    private function locateTicket(Request $request, User $authUser, string $ticket_id): ?Ticket
     {
+        $ticketId = $ticket_id;
         $query = Ticket::query()->with(['event', 'guest'])->whereKey($ticketId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

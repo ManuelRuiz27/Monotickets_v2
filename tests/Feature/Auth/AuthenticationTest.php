@@ -86,6 +86,33 @@ class AuthenticationTest extends TestCase
         ]);
     }
 
+    public function test_login_fails_when_user_is_inactive(): void
+    {
+        $email = 'inactive@example.com';
+        $this->clearRateLimiter('auth-login', $email);
+
+        $user = User::factory()->create([
+            'tenant_id' => Tenant::factory()->create()->id,
+            'email' => $email,
+            'password_hash' => Hash::make('Password123!'),
+            'is_active' => false,
+        ]);
+
+        $response = $this->postJson('/auth/login', [
+            'email' => $email,
+            'password' => 'Password123!',
+        ]);
+
+        $response->assertUnauthorized();
+        $response->assertJsonPath('error.code', 'UNAUTHORIZED');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $user->id,
+            'action' => 'login_failed',
+            'diff_json->reason' => 'user_inactive',
+        ]);
+    }
+
     public function test_login_requests_are_rate_limited_after_consecutive_failures(): void
     {
         $email = 'throttle@example.com';

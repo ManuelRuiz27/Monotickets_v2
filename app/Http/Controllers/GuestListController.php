@@ -29,8 +29,9 @@ class GuestListController extends Controller
     /**
      * Display a paginated listing of guest lists for an event.
      */
-    public function index(GuestListIndexRequest $request, string $eventId): JsonResponse
+    public function index(GuestListIndexRequest $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -61,8 +62,9 @@ class GuestListController extends Controller
     /**
      * Store a newly created guest list for the event.
      */
-    public function store(GuestListStoreRequest $request, string $eventId): JsonResponse
+    public function store(GuestListStoreRequest $request, string $event_id): JsonResponse
     {
+        $eventId = $event_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $event = $this->locateEvent($request, $authUser, $eventId);
@@ -118,8 +120,9 @@ class GuestListController extends Controller
     /**
      * Display the specified guest list.
      */
-    public function show(Request $request, string $guestListId): JsonResponse
+    public function show(Request $request, string $guest_list_id): JsonResponse
     {
+        $guestListId = $guest_list_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $guestList = $this->locateGuestList($request, $authUser, $guestListId);
@@ -136,8 +139,9 @@ class GuestListController extends Controller
     /**
      * Update the specified guest list.
      */
-    public function update(GuestListUpdateRequest $request, string $guestListId): JsonResponse
+    public function update(GuestListUpdateRequest $request, string $guest_list_id): JsonResponse
     {
+        $guestListId = $guest_list_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $guestList = $this->locateGuestList($request, $authUser, $guestListId);
@@ -186,8 +190,9 @@ class GuestListController extends Controller
     /**
      * Soft delete the specified guest list.
      */
-    public function destroy(Request $request, string $guestListId): JsonResponse
+    public function destroy(Request $request, string $guest_list_id): JsonResponse
     {
+        $guestListId = $guest_list_id;
         /** @var User $authUser */
         $authUser = $request->user();
         $guestList = $this->locateGuestList($request, $authUser, $guestListId);
@@ -224,8 +229,9 @@ class GuestListController extends Controller
     /**
      * Locate an event ensuring tenant constraints.
      */
-    private function locateEvent(Request $request, User $authUser, string $eventId): ?Event
+    private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
+        $eventId = $event_id;
         $query = Event::query()->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 

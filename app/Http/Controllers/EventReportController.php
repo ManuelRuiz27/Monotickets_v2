@@ -42,8 +42,9 @@ class EventReportController extends Controller
     /**
      * Stream attendance records as a CSV export.
      */
-    public function attendanceCsv(Request $request, string $eventId): StreamedResponse|JsonResponse
+    public function attendanceCsv(Request $request, string $event_id): StreamedResponse|JsonResponse
     {
+        $eventId = $event_id;
         $authUser = $request->user();
         $event = $this->findEventForRequest($request, $authUser, $eventId);
 
@@ -183,8 +184,9 @@ class EventReportController extends Controller
     /**
      * Render a summary PDF report with the main analytics tables.
      */
-    public function summaryPdf(Request $request, string $eventId)
+    public function summaryPdf(Request $request, string $event_id)
     {
+        $eventId = $event_id;
         $authUser = $request->user();
         $event = $this->findEventForRequest($request, $authUser, $eventId);
 

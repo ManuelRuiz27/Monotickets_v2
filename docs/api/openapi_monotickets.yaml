@@ -163,6 +163,57 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /billing/invoices/close:
+    patch:
+      summary: Cierra el periodo de facturación activo y emite la factura pendiente.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+          tenantHeader: []
+      responses:
+        '201':
+          description: Factura generada exitosamente para el periodo actual.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingInvoiceResponse'
+        '200':
+          description: Se devolvió la factura pendiente sin generar una nueva.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingInvoiceResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /billing/invoices/{invoice_id}/pay:
+    patch:
+      summary: Registra el pago de una factura existente.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+          tenantHeader: []
+      parameters:
+        - name: invoice_id
+          in: path
+          required: true
+          description: Identificador de la factura a pagar.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Factura pagada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingInvoiceResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
   /users:
     get:
       summary: Lista paginada de usuarios.
@@ -830,6 +881,102 @@ components:
           nullable: true
           additionalProperties:
             type: string
+    BillingInvoiceResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/BillingInvoiceResource'
+    BillingInvoiceResource:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - status
+        - subtotal_cents
+        - tax_cents
+        - total_cents
+        - line_items
+        - payments
+      properties:
+        id:
+          type: string
+          description: Identificador de la factura.
+        tenant_id:
+          type: string
+          description: Identificador del tenant asociado.
+        status:
+          type: string
+          description: Estado actual de la factura.
+          enum: [pending, paid, void]
+        period_start:
+          type: string
+          format: date-time
+          nullable: true
+        period_end:
+          type: string
+          format: date-time
+          nullable: true
+        issued_at:
+          type: string
+          format: date-time
+          nullable: true
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+        subtotal_cents:
+          type: integer
+        tax_cents:
+          type: integer
+        total_cents:
+          type: integer
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillingInvoiceLineItem'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillingInvoicePayment'
+    BillingInvoiceLineItem:
+      type: object
+      required: [type, description, quantity, unit_price_cents, amount_cents]
+      properties:
+        type:
+          type: string
+        description:
+          type: string
+        quantity:
+          type: integer
+        unit_price_cents:
+          type: integer
+        amount_cents:
+          type: integer
+    BillingInvoicePayment:
+      type: object
+      required: [id, provider, provider_charge_id, amount_cents, currency, status]
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+        provider_charge_id:
+          type: string
+        amount_cents:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
   responses:
     UnauthorizedError:
       description: Autenticación requerida o token inválido.
