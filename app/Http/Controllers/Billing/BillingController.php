@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Tenant;
 use App\Services\Billing\BillingService;
+use App\Services\Billing\Exceptions\BillingPeriodAlreadyClosedException;
 use App\Support\ApiResponse;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -50,7 +51,21 @@ class BillingController extends Controller
 
         $subscription->loadMissing('plan');
 
-        $preview = $this->billingService->preview($subscription);
+        $closeAtInput = $request->input('close_at');
+        $closeAt = $closeAtInput instanceof CarbonImmutable
+            ? $closeAtInput
+            : ($closeAtInput !== null ? CarbonImmutable::parse((string) $closeAtInput) : CarbonImmutable::now());
+
+        $simulation = $request->input('simulate', []);
+
+        if (! is_array($simulation)) {
+            $simulation = [];
+        }
+
+        $preview = $this->billingService->preview($subscription, $closeAt, [
+            'user_count' => array_key_exists('user_count', $simulation) ? $simulation['user_count'] : null,
+            'scan_count' => array_key_exists('scan_count', $simulation) ? $simulation['scan_count'] : null,
+        ]);
 
         return response()->json([
             'data' => $this->formatPreview($subscription->tenant_id, $preview),
@@ -83,7 +98,20 @@ class BillingController extends Controller
 
         $subscription->loadMissing('plan');
 
-        $invoice = $this->billingService->closePeriod($subscription);
+        try {
+            $invoice = $this->billingService->closePeriod($subscription);
+        } catch (BillingPeriodAlreadyClosedException $exception) {
+            $invoice = $exception->invoice();
+            $invoice->loadMissing('payments');
+
+            return ApiResponse::error(
+                'billing_period_closed',
+                'The billing period has already been closed.',
+                ['invoice' => $this->formatInvoice($invoice)],
+                Response::HTTP_CONFLICT
+            );
+        }
+
         $created = $invoice->wasRecentlyCreated;
         $invoice->loadMissing('payments');
 
