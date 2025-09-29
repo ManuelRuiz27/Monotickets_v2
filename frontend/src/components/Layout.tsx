@@ -8,6 +8,7 @@ const Layout = () => {
   const canAccessHostess = user ? ['hostess', 'organizer'].includes(user.role) : false;
   const isSuperAdmin = user?.role === 'superadmin';
   const canAccessSettings = user ? ['organizer', 'superadmin'].includes(user.role) : false;
+  const canAccessBilling = user ? ['tenant_owner', 'superadmin'].includes(user.role) : false;
 
   const handleLogout = () => {
     logout();
@@ -23,6 +24,7 @@ const Layout = () => {
             Dashboard
           </NavLink>
           {canAccessSettings && <NavLink to="/settings">Configuración</NavLink>}
+          {canAccessBilling && <NavLink to="/billing">Facturación</NavLink>}
           {isSuperAdmin && <NavLink to="/admin/tenants">Tenants</NavLink>}
           {isSuperAdmin && <NavLink to="/admin/analytics">Analítica</NavLink>}
           {canManageEvents && <NavLink to="/events">Eventos</NavLink>}

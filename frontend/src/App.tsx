@@ -12,6 +12,7 @@ import AdminAnalytics from './pages/AdminAnalytics';
 import TenantSettings from './pages/TenantSettings';
 import AdminTenants from './pages/AdminTenants';
 import TenantUsage from './pages/TenantUsage';
+import Billing from './pages/Billing';
 import { RequireAuth, RequireRole } from './routes/guards';
 import Layout from './components/Layout';
 
@@ -32,6 +33,14 @@ function App() {
           element={
             <RequireRole roles={['organizer', 'superadmin']}>
               <TenantSettings />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="billing"
+          element={
+            <RequireRole roles={['tenant_owner', 'superadmin']}>
+              <Billing />
             </RequireRole>
           }
         />

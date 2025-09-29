@@ -364,6 +364,206 @@ class BillingControllerTest extends TestCase
         $this->assertSame($invoice->total_cents, $payment->amount_cents);
     }
 
+    public function test_index_returns_invoice_summaries_for_tenant(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $plan = Plan::factory()->create([
+            'features_json' => ['exports' => ['pdf' => true]],
+        ]);
+
+        Subscription::factory()
+            ->for($tenant)
+            ->for($plan)
+            ->create([
+                'status' => Subscription::STATUS_ACTIVE,
+                'current_period_start' => $this->periodStart,
+                'current_period_end' => $this->periodEnd,
+            ]);
+
+        Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'status' => Invoice::STATUS_PENDING,
+            'period_start' => $this->periodStart,
+            'period_end' => $this->periodEnd,
+            'issued_at' => $this->periodEnd->addDay(),
+            'due_at' => $this->periodEnd->addDays(7),
+            'subtotal_cents' => 5000,
+            'tax_cents' => 950,
+            'total_cents' => 5950,
+            'line_items_json' => [
+                [
+                    'type' => 'base_plan',
+                    'description' => 'Plan mensual',
+                    'quantity' => 1,
+                    'unit_price_cents' => 5000,
+                    'amount_cents' => 5000,
+                ],
+            ],
+        ]);
+
+        Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'status' => Invoice::STATUS_PAID,
+            'period_start' => $this->periodStart->subMonth(),
+            'period_end' => $this->periodStart->subDay(),
+            'issued_at' => $this->periodStart->subDays(2),
+            'due_at' => $this->periodStart->addDays(5),
+            'paid_at' => $this->periodStart->addDays(3),
+            'subtotal_cents' => 4000,
+            'tax_cents' => 760,
+            'total_cents' => 4760,
+            'line_items_json' => [],
+        ]);
+
+        $owner = $this->createTenantOwner($tenant);
+
+        $response = $this->actingAs($owner, 'api')->getJson('/billing/invoices', [
+            'X-Tenant-ID' => $tenant->id,
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('meta.can_export_pdf', true);
+        $response->assertJsonCount(2, 'data');
+        $response->assertJsonPath('data.0.total_cents', 5950);
+        $response->assertJsonPath('data.0.status', Invoice::STATUS_PENDING);
+        $response->assertJsonPath('data.1.status', Invoice::STATUS_PAID);
+    }
+
+    public function test_show_returns_invoice_detail(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $plan = Plan::factory()->create([
+            'features_json' => ['exports' => ['pdf' => true]],
+        ]);
+
+        Subscription::factory()
+            ->for($tenant)
+            ->for($plan)
+            ->create([
+                'status' => Subscription::STATUS_ACTIVE,
+                'current_period_start' => $this->periodStart,
+                'current_period_end' => $this->periodEnd,
+            ]);
+
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'status' => Invoice::STATUS_PENDING,
+            'period_start' => $this->periodStart,
+            'period_end' => $this->periodEnd,
+            'issued_at' => $this->periodEnd->addDay(),
+            'due_at' => $this->periodEnd->addDays(7),
+            'subtotal_cents' => 5000,
+            'tax_cents' => 950,
+            'total_cents' => 5950,
+            'line_items_json' => [
+                [
+                    'type' => 'base_plan',
+                    'description' => 'Plan mensual',
+                    'quantity' => 1,
+                    'unit_price_cents' => 5000,
+                    'amount_cents' => 5000,
+                ],
+                [
+                    'type' => 'user_overage',
+                    'description' => 'Usuarios adicionales',
+                    'quantity' => 2,
+                    'unit_price_cents' => 250,
+                    'amount_cents' => 500,
+                ],
+            ],
+        ]);
+
+        $owner = $this->createTenantOwner($tenant);
+
+        $response = $this->actingAs($owner, 'api')->getJson(
+            sprintf('/billing/invoices/%s', $invoice->id),
+            ['X-Tenant-ID' => $tenant->id]
+        );
+
+        $response->assertOk();
+        $response->assertJsonPath('data.id', (string) $invoice->id);
+        $response->assertJsonPath('data.line_items.0.type', 'base_plan');
+        $response->assertJsonPath('data.line_items.1.quantity', 2);
+        $response->assertJsonPath('data.payments', []);
+    }
+
+    public function test_invoice_pdf_export_requires_enabled_feature(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $plan = Plan::factory()->create([
+            'features_json' => ['exports' => ['pdf' => true]],
+        ]);
+
+        Subscription::factory()
+            ->for($tenant)
+            ->for($plan)
+            ->create([
+                'status' => Subscription::STATUS_ACTIVE,
+                'current_period_start' => $this->periodStart,
+                'current_period_end' => $this->periodEnd,
+            ]);
+
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'status' => Invoice::STATUS_PENDING,
+            'period_start' => $this->periodStart,
+            'period_end' => $this->periodEnd,
+            'issued_at' => $this->periodEnd,
+            'subtotal_cents' => 5000,
+            'tax_cents' => 0,
+            'total_cents' => 5000,
+            'line_items_json' => [],
+        ]);
+
+        $owner = $this->createTenantOwner($tenant);
+
+        $response = $this->actingAs($owner, 'api')->get(
+            sprintf('/billing/invoices/%s/pdf', $invoice->id),
+            ['X-Tenant-ID' => $tenant->id]
+        );
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+    }
+
+    public function test_invoice_pdf_export_forbidden_when_feature_disabled(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $plan = Plan::factory()->create([
+            'features_json' => ['exports' => ['pdf' => false]],
+        ]);
+
+        Subscription::factory()
+            ->for($tenant)
+            ->for($plan)
+            ->create([
+                'status' => Subscription::STATUS_ACTIVE,
+                'current_period_start' => $this->periodStart,
+                'current_period_end' => $this->periodEnd,
+            ]);
+
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'status' => Invoice::STATUS_PENDING,
+            'period_start' => $this->periodStart,
+            'period_end' => $this->periodEnd,
+            'issued_at' => $this->periodEnd,
+            'subtotal_cents' => 5000,
+            'tax_cents' => 0,
+            'total_cents' => 5000,
+            'line_items_json' => [],
+        ]);
+
+        $owner = $this->createTenantOwner($tenant);
+
+        $response = $this->actingAs($owner, 'api')->get(
+            sprintf('/billing/invoices/%s/pdf', $invoice->id),
+            ['X-Tenant-ID' => $tenant->id]
+        );
+
+        $response->assertStatus(HttpResponse::HTTP_FORBIDDEN);
+    }
+
     private function proratedAmount(int $amount, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, CarbonImmutable $closeAt): int
     {
         $periodEndExclusive = $periodEnd->addSecond();
