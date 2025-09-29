@@ -8,6 +8,7 @@ import EventDetail from './pages/EventDetail';
 import VenueDetail from './pages/VenueDetail';
 import GuestDetail from './pages/GuestDetail';
 import Hostess from './pages/Hostess';
+import AdminAnalytics from './pages/AdminAnalytics';
 import { RequireAuth, RequireRole } from './routes/guards';
 import Layout from './components/Layout';
 
@@ -23,6 +24,14 @@ function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route
+          path="admin/analytics"
+          element={
+            <RequireRole roles={['superadmin']}>
+              <AdminAnalytics />
+            </RequireRole>
+          }
+        />
         <Route
           path="users"
           element={

@@ -6,6 +6,7 @@ const Layout = () => {
   const { user, logout } = useAuthStore();
   const canManageEvents = user?.role === 'organizer' || user?.role === 'superadmin';
   const canAccessHostess = user ? ['hostess', 'organizer'].includes(user.role) : false;
+  const isSuperAdmin = user?.role === 'superadmin';
 
   const handleLogout = () => {
     logout();
@@ -20,6 +21,7 @@ const Layout = () => {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
+          {isSuperAdmin && <NavLink to="/admin/analytics">Analítica</NavLink>}
           {canManageEvents && <NavLink to="/events">Eventos</NavLink>}
           {canManageEvents && <NavLink to="/users">Usuarios</NavLink>}
           {canAccessHostess && <NavLink to="/hostess">Hostess</NavLink>}
