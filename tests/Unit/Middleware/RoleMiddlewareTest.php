@@ -4,7 +4,9 @@ namespace Tests\Unit\Middleware;
 
 use App\Http\Middleware\RoleMiddleware;
 use App\Models\Role;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Support\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,9 +16,11 @@ class RoleMiddlewareTest extends MiddlewareTestCase
 {
     public function test_allows_user_with_matching_role_in_tenant(): void
     {
-        $middleware = new RoleMiddleware();
+        $tenant = $this->makeTenant('tenant-1');
+        $tenantContext = new TenantContext();
+        $tenantContext->setTenant($tenant);
+        $middleware = new RoleMiddleware($tenantContext);
         $request = Request::create('/events', 'GET');
-        $request->headers->set('X-Tenant-ID', 'tenant-1');
 
         $user = $this->makeUser('tenant-1', [
             ['code' => 'organizer', 'tenant_id' => 'tenant-1'],
@@ -31,9 +35,11 @@ class RoleMiddlewareTest extends MiddlewareTestCase
 
     public function test_denies_user_without_required_role(): void
     {
-        $middleware = new RoleMiddleware();
+        $tenant = $this->makeTenant('tenant-1');
+        $tenantContext = new TenantContext();
+        $tenantContext->setTenant($tenant);
+        $middleware = new RoleMiddleware($tenantContext);
         $request = Request::create('/events', 'GET');
-        $request->headers->set('X-Tenant-ID', 'tenant-1');
 
         $user = $this->makeUser('tenant-1', [
             ['code' => 'hostess', 'tenant_id' => 'tenant-1'],
@@ -49,7 +55,8 @@ class RoleMiddlewareTest extends MiddlewareTestCase
 
     public function test_allows_superadmin_without_tenant_header(): void
     {
-        $middleware = new RoleMiddleware();
+        $tenantContext = new TenantContext();
+        $middleware = new RoleMiddleware($tenantContext);
         $request = Request::create('/events', 'GET');
 
         $user = $this->makeUser(null, [
@@ -63,9 +70,10 @@ class RoleMiddlewareTest extends MiddlewareTestCase
         $this->assertSame('OK', $response->getContent());
     }
 
-    public function test_allows_user_when_header_missing_but_tenant_matches(): void
+    public function test_denies_user_when_tenant_context_missing(): void
     {
-        $middleware = new RoleMiddleware();
+        $tenantContext = new TenantContext();
+        $middleware = new RoleMiddleware($tenantContext);
         $request = Request::create('/events', 'GET');
 
         $user = $this->makeUser('tenant-1', [
@@ -74,9 +82,10 @@ class RoleMiddlewareTest extends MiddlewareTestCase
 
         $request->setUserResolver(fn () => $user);
 
-        $response = $middleware->handle($request, fn (Request $req) => new Response('OK'), 'organizer');
+        $this->expectException(HttpException::class);
+        $this->expectExceptionCode(Response::HTTP_FORBIDDEN);
 
-        $this->assertSame('OK', $response->getContent());
+        $middleware->handle($request, fn (Request $req) => new Response('OK'), 'organizer');
     }
 
     /**
@@ -109,5 +118,19 @@ class RoleMiddlewareTest extends MiddlewareTestCase
         $user->setRelation('roles', new Collection($roleModels));
 
         return $user;
+    }
+
+    private function makeTenant(string $id): Tenant
+    {
+        $tenant = new Tenant();
+        $tenant->forceFill([
+            'id' => $id,
+            'name' => 'Tenant',
+            'slug' => 'tenant',
+            'status' => 'active',
+            'plan' => 'standard',
+        ]);
+
+        return $tenant;
     }
 }

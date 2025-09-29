@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
+use App\Models\Scopes\EventTenantScope;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -25,14 +25,9 @@ class Checkpoint extends Model
         'description',
     ];
 
-    /**
-     * Scope the query to checkpoints whose event belongs to the given tenant.
-     */
-    public function scopeForTenant(Builder $query, string $tenantId): Builder
+    protected static function booted(): void
     {
-        return $query->whereHas('event', function (Builder $eventQuery) use ($tenantId): void {
-            $eventQuery->where('tenant_id', $tenantId);
-        });
+        static::addGlobalScope(new EventTenantScope());
     }
 
     /**

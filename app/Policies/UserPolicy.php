@@ -4,7 +4,9 @@ namespace App\Policies;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Support\TenantContext;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use function app;
 
 /**
  * Authorisation policy for user management.
@@ -108,10 +110,10 @@ class UserPolicy
      */
     private function isSameTenant(User $user, User $model): bool
     {
-        $tenantContext = config('tenant.id');
+        $tenantContext = app(TenantContext::class);
 
-        if ($tenantContext !== null && $tenantContext !== '') {
-            return (string) $model->tenant_id === (string) $tenantContext;
+        if ($tenantContext->hasTenant()) {
+            return (string) $model->tenant_id === (string) $tenantContext->tenantId();
         }
 
         return (string) $user->tenant_id === (string) $model->tenant_id;

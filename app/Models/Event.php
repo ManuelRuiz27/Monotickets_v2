@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Scopes\TenantScope;
+use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -52,6 +54,16 @@ class Event extends Model
      */
     protected static function booted(): void
     {
+        static::addGlobalScope(new TenantScope());
+
+        static::creating(function (Event $event): void {
+            $context = app(TenantContext::class);
+
+            if ($context->hasTenant() && empty($event->tenant_id)) {
+                $event->tenant_id = $context->tenantId();
+            }
+        });
+
         static::saving(function (Event $event): void {
             if ($event->start_at && $event->end_at && $event->start_at->gte($event->end_at)) {
                 throw new InvalidArgumentException('The event end time must be after the start time.');

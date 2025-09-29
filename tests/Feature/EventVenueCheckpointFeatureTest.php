@@ -48,6 +48,29 @@ class EventVenueCheckpointFeatureTest extends TestCase
             ->every(fn (array $event) => $event['tenant_id'] === $tenantA->id));
     }
 
+    public function test_organizer_request_without_tenant_header_is_forbidden(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+
+        $response = $this->actingAs($organizer, 'api')->getJson('/events');
+
+        $response->assertForbidden();
+    }
+
+    public function test_organizer_request_with_mismatched_tenant_header_is_forbidden(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+
+        $response = $this->actingAs($organizer, 'api')
+            ->withHeaders(['X-Tenant-ID' => $otherTenant->id])
+            ->getJson('/events');
+
+        $response->assertForbidden();
+    }
+
     public function test_superadmin_lists_events_across_all_tenants(): void
     {
         $tenantA = Tenant::factory()->create();
@@ -65,6 +88,55 @@ class EventVenueCheckpointFeatureTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('meta.total', 3);
+    }
+
+    public function test_superadmin_impersonates_tenant_to_list_events(): void
+    {
+        $tenantA = Tenant::factory()->create();
+        $tenantB = Tenant::factory()->create();
+
+        $organizerA = $this->createOrganizer($tenantA);
+        $organizerB = $this->createOrganizer($tenantB);
+
+        Event::factory()->for($tenantA)->for($organizerA, 'organizer')->count(2)->create();
+        Event::factory()->for($tenantB)->for($organizerB, 'organizer')->create();
+
+        $superAdmin = $this->createSuperAdmin();
+
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenantA->id])
+            ->getJson('/events');
+
+        $response->assertOk();
+        $response->assertJsonPath('meta.total', 2);
+        $this->assertTrue(collect($response->json('data'))
+            ->every(fn (array $event) => $event['tenant_id'] === $tenantA->id));
+    }
+
+    public function test_superadmin_impersonation_cannot_access_event_from_other_tenant(): void
+    {
+        $tenantA = Tenant::factory()->create();
+        $tenantB = Tenant::factory()->create();
+        $organizerA = $this->createOrganizer($tenantA);
+        $organizerB = $this->createOrganizer($tenantB);
+
+        $eventA = Event::factory()->for($tenantA)->for($organizerA, 'organizer')->create();
+        $eventB = Event::factory()->for($tenantB)->for($organizerB, 'organizer')->create();
+
+        $superAdmin = $this->createSuperAdmin();
+
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenantA->id])
+            ->getJson('/events/' . $eventB->id);
+
+        $response->assertNotFound();
+
+        $allowed = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenantA->id])
+            ->getJson('/events/' . $eventA->id);
+
+        $allowed->assertOk();
+        $allowed->assertJsonPath('data.id', $eventA->id);
     }
 
     public function test_event_index_applies_status_date_and_search_filters(): void
@@ -95,7 +167,9 @@ class EventVenueCheckpointFeatureTest extends TestCase
             'start_at' => CarbonImmutable::parse('2024-03-05'),
         ]);
 
-        $response = $this->actingAs($superAdmin, 'api')->getJson('/events?' . http_build_query([
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->getJson('/events?' . http_build_query([
             'status' => 'published',
             'from' => '2024-02-01',
             'to' => '2024-02-28',
@@ -118,7 +192,9 @@ class EventVenueCheckpointFeatureTest extends TestCase
             'name' => 'Valid Event',
         ]);
 
-        $response = $this->actingAs($superAdmin, 'api')->postJson('/events', $payload);
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->postJson('/events', $payload);
 
         $response->assertCreated();
         $response->assertJsonPath('data.code', 'EVT-VALID');
@@ -150,7 +226,9 @@ class EventVenueCheckpointFeatureTest extends TestCase
             'code' => 'EVT-DUP',
         ]);
 
-        $response = $this->actingAs($superAdmin, 'api')->postJson('/events', $payload);
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->postJson('/events', $payload);
 
         $response->assertUnprocessable();
         $response->assertJsonValidationErrors(['code']);
@@ -168,7 +246,9 @@ class EventVenueCheckpointFeatureTest extends TestCase
             'end_at' => $start->toISOString(),
         ]);
 
-        $response = $this->actingAs($superAdmin, 'api')->postJson('/events', $payload);
+        $response = $this->actingAs($superAdmin, 'api')
+            ->withHeaders(['X-Tenant-ID' => $tenant->id])
+            ->postJson('/events', $payload);
 
         $response->assertUnprocessable();
         $response->assertJsonValidationErrors(['end_at']);

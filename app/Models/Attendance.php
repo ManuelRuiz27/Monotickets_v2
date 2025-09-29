@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Scopes\EventTenantScope;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,6 +14,11 @@ class Attendance extends Model
     use HasFactory;
     use HasUuids;
     use SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new EventTenantScope());
+    }
 
     /**
      * @var array<int, string>

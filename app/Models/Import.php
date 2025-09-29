@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Scopes\TenantScope;
+use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -43,6 +45,16 @@ class Import extends Model
      */
     protected static function booted(): void
     {
+        static::addGlobalScope(new TenantScope());
+
+        static::creating(function (Import $import): void {
+            $context = app(TenantContext::class);
+
+            if ($context->hasTenant() && empty($import->tenant_id)) {
+                $import->tenant_id = $context->tenantId();
+            }
+        });
+
         static::deleting(function (Import $import): void {
             if ($import->isForceDeleting()) {
                 $import->rows()->withTrashed()->get()->each->forceDelete();

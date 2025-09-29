@@ -4,9 +4,10 @@ namespace App\Http\Controllers\Concerns;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Support\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
-use function config;
+use function app;
 
 /**
  * Shared helpers for controllers operating under tenant context.
@@ -28,16 +29,16 @@ trait InteractsWithTenants
      */
     private function resolveTenantContext(Request $request, User $authUser): ?string
     {
+        $tenantContext = app(TenantContext::class);
+
+        if ($tenantContext->hasTenant()) {
+            return $tenantContext->tenantId();
+        }
+
         $tenantId = (string) $request->attributes->get('tenant_id');
 
         if ($tenantId !== '') {
             return $tenantId;
-        }
-
-        $configuredTenant = (string) config('tenant.id');
-
-        if ($configuredTenant !== '') {
-            return $configuredTenant;
         }
 
         $headerTenant = $request->headers->get('X-Tenant-ID');

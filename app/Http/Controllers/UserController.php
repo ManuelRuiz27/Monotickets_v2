@@ -20,6 +20,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use App\Support\TenantContext;
+use function app;
 
 /**
  * Manage application users.
@@ -40,33 +42,30 @@ class UserController extends Controller
 
         $filters = $request->validated();
 
+        $tenantContextId = $this->resolveTenantContext($request, $authUser);
+
         $query = User::query()->with('roles');
 
-        if (! $this->isSuperAdmin($authUser)) {
-            $tenantId = $this->resolveTenantContext($request, $authUser);
-
-            if ($tenantId === null) {
-                $this->throwValidationException([
-                    'tenant_id' => ['Unable to determine tenant context.'],
-                ]);
-            }
-
-            $query->where('tenant_id', $tenantId);
+        if ($tenantContextId !== null) {
+            $query->where('tenant_id', $tenantContextId);
+        } elseif (! $this->isSuperAdmin($authUser)) {
+            $this->throwValidationException([
+                'tenant_id' => ['Unable to determine tenant context.'],
+            ]);
         }
 
         if (isset($filters['role'])) {
             $roleCode = $filters['role'];
-            $tenantId = $this->resolveTenantContext($request, $authUser);
 
-            $query->whereHas('roles', function ($roleQuery) use ($roleCode, $tenantId, $authUser): void {
+            $query->whereHas('roles', function ($roleQuery) use ($roleCode, $tenantContextId, $authUser): void {
                 $roleQuery->where('roles.code', $roleCode);
 
-                if (! $this->isSuperAdmin($authUser)) {
-                    $roleQuery->where(function ($tenantQuery) use ($roleCode, $tenantId): void {
+                if ($tenantContextId !== null) {
+                    $roleQuery->where(function ($tenantQuery) use ($roleCode, $tenantContextId): void {
                         if ($roleCode === 'superadmin') {
                             $tenantQuery->whereNull('roles.tenant_id');
                         } else {
-                            $tenantQuery->where('roles.tenant_id', $tenantId);
+                            $tenantQuery->where('roles.tenant_id', $tenantContextId);
                         }
                     });
                 }
@@ -301,16 +300,16 @@ class UserController extends Controller
      */
     private function resolveTenantContext(Request $request, User $authUser): ?string
     {
+        $tenantContext = app(TenantContext::class);
+
+        if ($tenantContext->hasTenant()) {
+            return $tenantContext->tenantId();
+        }
+
         $tenantId = (string) $request->attributes->get('tenant_id');
 
         if ($tenantId !== '') {
             return $tenantId;
-        }
-
-        $configuredTenant = (string) config('tenant.id');
-
-        if ($configuredTenant !== '') {
-            return $configuredTenant;
         }
 
         $headerTenant = $request->headers->get('X-Tenant-ID');

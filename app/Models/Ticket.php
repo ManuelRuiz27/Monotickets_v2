@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Scopes\EventTenantScope;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -46,6 +47,8 @@ class Ticket extends Model
      */
     protected static function booted(): void
     {
+        static::addGlobalScope(new EventTenantScope());
+
         static::deleting(function (Ticket $ticket): void {
             if ($ticket->isForceDeleting()) {
                 $ticket->attendances()->withTrashed()->get()->each->forceDelete();
