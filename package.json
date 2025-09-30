@@ -1,0 +1,21 @@
+{
+  "name": "monotickets-tooling",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "husky install",
+    "lint": "npm run lint:php && npm run lint:ts",
+    "lint:php": "./scripts/php-cs-fixer-check.sh",
+    "lint:ts": "npm --prefix frontend run lint",
+    "format": "npm --prefix frontend run format",
+    "typecheck": "npm --prefix frontend run typecheck",
+    "openapi:validate": "redocly lint docs/api/openapi_monotickets.yaml",
+    "test": "npm run test:php",
+    "test:php": "composer test",
+    "test:fast": "composer test:fast"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^1.17.1",
+    "husky": "^9.0.11"
+  }
+}
