@@ -20,6 +20,7 @@ use App\Http\Controllers\GuestController;
 use App\Http\Controllers\GuestListController;
 use App\Http\Controllers\HostessAssignmentController;
 use App\Http\Controllers\HostessAssignmentMeController;
+use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\QrController;
 use App\Http\Controllers\ScanController;
@@ -57,8 +58,11 @@ Route::middleware('api')->group(function (): void {
         return response()->noContent();
     })->where('any', '.*');
 
+    Route::get('health', HealthCheckController::class)->name('health');
+
     Route::prefix('auth')
         ->withoutMiddleware([ResolveTenant::class])
+        ->middleware('throttle:auth-generic')
         ->group(function (): void {
             Route::post('login', [LoginController::class, 'login'])
                 ->middleware('throttle:auth-login')
@@ -223,7 +227,9 @@ Route::middleware('api')->group(function (): void {
         Route::post('scan', [ScanController::class, 'store'])
             ->middleware(['throttle:scan-device', 'limits:scan.record'])
             ->name('scan.store');
-        Route::post('scan/batch', [ScanController::class, 'batch'])->name('scan.batch');
+        Route::post('scan/batch', [ScanController::class, 'batch'])
+            ->middleware('throttle:scan-device')
+            ->name('scan.batch');
     });
 
     Route::middleware(['auth:api', 'role:superadmin,tenant_owner'])
