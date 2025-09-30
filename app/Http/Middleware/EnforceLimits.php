@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\Builder;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnforceLimits
@@ -366,7 +367,9 @@ class EnforceLimits
             $query->select(['id', 'event_id']);
         }, 'ticket.event' => function ($query): void {
             $query->select(['id', 'tenant_id']);
-        }])->where('code', $qrCode)->first();
+        }])->where(function (Builder $builder) use ($qrCode): void {
+            $builder->where('payload', $qrCode)->orWhere('display_code', $qrCode);
+        })->first();
 
         if ($qr === null || $qr->ticket === null || $qr->ticket->event === null) {
             return null;

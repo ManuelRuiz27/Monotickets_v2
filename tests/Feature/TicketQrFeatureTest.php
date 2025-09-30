@@ -8,6 +8,7 @@ use App\Models\Guest;
 use App\Models\Qr;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Services\Qr\QrCodeProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesUsers;
 use Tests\TestCase;
@@ -45,9 +46,12 @@ class TicketQrFeatureTest extends TestCase
             'status' => 'issued',
             'issued_at' => now(),
         ]);
+        $generated = app(QrCodeProvider::class)->generate($ticket);
+
         $qr = Qr::query()->create([
             'ticket_id' => $ticket->id,
-            'code' => 'MT-TEST-0001',
+            'display_code' => $generated->displayCode,
+            'payload' => $generated->payload,
             'version' => 3,
             'is_active' => true,
         ]);
@@ -56,7 +60,9 @@ class TicketQrFeatureTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('data.id', $qr->id);
-        $response->assertJsonPath('data.code', 'MT-TEST-0001');
+        $response->assertJsonPath('data.code', $qr->display_code);
+        $response->assertJsonPath('data.display_code', $qr->display_code);
+        $response->assertJsonPath('data.payload', $qr->payload);
         $response->assertJsonPath('data.version', 3);
     }
 
@@ -89,6 +95,8 @@ class TicketQrFeatureTest extends TestCase
             'version' => 1,
             'is_active' => true,
         ]);
+        $this->assertNotEmpty($response->json('data.payload'));
+        $this->assertMatchesRegularExpression('/^MT-[A-Z0-9]{4}-[A-Z0-9]{4}$/', $response->json('data.display_code'));
 
         $auditLog = AuditLog::query()->where('entity', 'qr')->where('entity_id', $response->json('data.id'))->first();
         $this->assertNotNull($auditLog);
@@ -133,7 +141,7 @@ class TicketQrFeatureTest extends TestCase
             'version' => 5,
             'is_active' => true,
         ]);
-        $this->assertNotSame('MT-TEST-0002', $response->json('data.code'));
+        $this->assertNotSame($qr->display_code, $response->json('data.display_code'));
     }
 
     public function test_store_rejects_ticket_that_is_not_issued(): void

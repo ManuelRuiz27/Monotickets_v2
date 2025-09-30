@@ -7,7 +7,6 @@ use App\Http\Controllers\Concerns\InteractsWithTenants;
 use App\Models\Qr;
 use App\Models\Ticket;
 use App\Models\User;
-use App\Services\Qr\InternalQrCodeProvider;
 use App\Services\Qr\QrCodeProvider;
 use App\Support\ApiResponse;
 use App\Support\Logging\StructuredLogging;
@@ -25,11 +24,8 @@ class QrController extends Controller
     use InteractsWithTenants;
     use StructuredLogging;
 
-    private QrCodeProvider $qrCodeProvider;
-
-    public function __construct(InternalQrCodeProvider $qrCodeProvider)
+    public function __construct(private readonly QrCodeProvider $qrCodeProvider)
     {
-        $this->qrCodeProvider = $qrCodeProvider;
     }
 
     /**
@@ -87,7 +83,10 @@ class QrController extends Controller
             $qr->version = 0;
         }
 
-        $qr->code = $this->qrCodeProvider->generate($ticket);
+        $generated = $this->qrCodeProvider->generate($ticket);
+
+        $qr->display_code = $generated->displayCode;
+        $qr->payload = $generated->payload;
         $qr->version = (int) $qr->version + 1;
         $qr->is_active = true;
         $qr->save();
@@ -168,7 +167,9 @@ class QrController extends Controller
         return [
             'id' => $qr->id,
             'ticket_id' => $qr->ticket_id,
-            'code' => $qr->code,
+            'code' => $qr->display_code,
+            'display_code' => $qr->display_code,
+            'payload' => $qr->payload,
             'version' => $qr->version,
             'is_active' => $qr->is_active,
             'created_at' => optional($qr->created_at)->toISOString(),
