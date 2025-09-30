@@ -9,6 +9,7 @@ use App\Models\HostessAssignment;
 use App\Models\Qr;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Services\Qr\QrCodeProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -207,9 +208,13 @@ class EventAttendanceControllerTest extends TestCase
             'expires_at' => $overrides['expires_at'] ?? null,
         ]);
 
+        $generated = app(QrCodeProvider::class)->generate($ticket);
+        $displayCode = $overrides['qr_code'] ?? $generated->displayCode;
+
         $qr = Qr::query()->create([
             'ticket_id' => $ticket->id,
-            'code' => $overrides['qr_code'] ?? sprintf('QR-%s', Str::upper(Str::random(8))),
+            'display_code' => $displayCode,
+            'payload' => $generated->payload,
             'version' => $overrides['qr_version'] ?? 1,
             'is_active' => $overrides['is_active'] ?? true,
         ]);

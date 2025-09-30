@@ -19,9 +19,11 @@ class Qr extends Model
      */
     protected $fillable = [
         'ticket_id',
-        'code',
+        'display_code',
+        'payload',
         'version',
         'is_active',
+        'code',
     ];
 
     /**
@@ -31,6 +33,16 @@ class Qr extends Model
         'version' => 'integer',
         'is_active' => 'boolean',
     ];
+
+    public function getCodeAttribute(): ?string
+    {
+        return $this->attributes['display_code'] ?? null;
+    }
+
+    public function setCodeAttribute(?string $value): void
+    {
+        $this->attributes['display_code'] = $value;
+    }
 
     /**
      * Ticket that owns the QR code.

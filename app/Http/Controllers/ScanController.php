@@ -15,6 +15,7 @@ use App\Support\Audit\RecordsAuditLogs;
 use App\Support\Logging\StructuredLogging;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -276,12 +277,12 @@ class ScanController extends Controller
         $checkpoint = null;
 
         try {
-            $qr = Qr::query()
-                ->with(['ticket' => function ($query): void {
+            $qr = $this->applyQrCodeFilter(
+                Qr::query()->with(['ticket' => function ($query): void {
                     $query->with(['event', 'guest']);
-                }])
-                ->where('code', $qrCode)
-                ->first();
+                }]),
+                $qrCode
+            )->first();
 
             $this->ensureDatabaseWithinTimeout($startedAt);
 
@@ -1022,6 +1023,13 @@ class ScanController extends Controller
             'offline' => $attendance->offline,
             'metadata' => $attendance->metadata_json,
         ];
+    }
+
+    private function applyQrCodeFilter(Builder $query, string $code): Builder
+    {
+        return $query->where(function (Builder $builder) use ($code): void {
+            $builder->where('payload', $code)->orWhere('display_code', $code);
+        });
     }
 
     /**
