@@ -1,8 +1,7 @@
-version: "3.9"
 
 services:
   app:
-    image: thecodingmachine/php:8.2-v4-slim-cli
+    image: thecodingmachine/php:8.2-v4-cli
     working_dir: /var/www/html
     volumes:
       - ./:/var/www/html
@@ -25,10 +24,10 @@ services:
       db:
         condition: service_healthy
     command: >
-      bash -lc "composer install && php artisan key:generate --force && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000"
+      bash -lc "rm -f storage/framework/.migrated && until php -r \"mysqli_report(MYSQLI_REPORT_OFF); exit((int)!@mysqli_connect(getenv('DB_HOST'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'), null, (int)(getenv('DB_PORT') ?: 3306)));\"; do sleep 2; done && composer install && php artisan key:generate --force && php artisan migrate --force && touch storage/framework/.migrated && php artisan serve --host=0.0.0.0 --port=8000"
 
   queue:
-    image: thecodingmachine/php:8.2-v4-slim-cli
+    image: thecodingmachine/php:8.2-v4-cli
     working_dir: /var/www/html
     volumes:
       - ./:/var/www/html
@@ -47,11 +46,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      app:
+        condition: service_started
     command: >
-      bash -lc "composer install && php artisan migrate --force && php artisan queue:work --verbose --tries=3 --timeout=90"
+      bash -lc "while [ ! -f vendor/autoload.php ]; do sleep 2; done; while [ ! -f storage/framework/.migrated ]; do sleep 2; done; php artisan queue:work --verbose --tries=3 --timeout=90"
 
   scheduler:
-    image: thecodingmachine/php:8.2-v4-slim-cli
+    image: thecodingmachine/php:8.2-v4-cli
     working_dir: /var/www/html
     volumes:
       - ./:/var/www/html
@@ -70,14 +71,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      app:
+        condition: service_started
     command: >
-      bash -lc "composer install && php artisan migrate --force && while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+      bash -lc "while [ ! -f vendor/autoload.php ]; do sleep 2; done; while [ ! -f storage/framework/.migrated ]; do sleep 2; done; while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
 
   db:
     image: mysql:8.0
     restart: unless-stopped
     ports:
-      - "3306:3306"
+      - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}

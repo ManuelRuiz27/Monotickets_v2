@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
   type UseMutationOptions,
-  type UseQueryOptions,
 } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export type RsvpStatus = 'none' | 'invited' | 'confirmed' | 'declined';
 
@@ -101,7 +102,7 @@ function buildQueryString(filters: GuestFilters): string {
 export function useEventGuests(
   eventId: string | undefined,
   filters: GuestFilters,
-  options?: UseQueryOptions<GuestsListResponse, unknown, GuestsListResponse, [string, string, string, GuestFilters]>,
+  options?: AppQueryOptions<GuestsListResponse, GuestsListResponse, [string, string, string, GuestFilters]>,
 ) {
   const queryKey: [string, string, string, GuestFilters] = useMemo(
     () => ['events', eventId ?? '', 'guests', filters],
@@ -115,14 +116,14 @@ export function useEventGuests(
       return apiFetch<GuestsListResponse>(`/events/${eventId}/guests?${queryString}`);
     },
     enabled: Boolean(eventId),
-    keepPreviousData: true,
+    placeholderData: options?.placeholderData ?? keepPreviousData,
     ...options,
   });
 }
 
 export function useGuest(
   guestId: string | undefined,
-  options?: UseQueryOptions<GuestSingleResponse, unknown, GuestSingleResponse, [string, string]>,
+  options?: AppQueryOptions<GuestSingleResponse, GuestSingleResponse, [string, string]>,
 ) {
   return useQuery<GuestSingleResponse, unknown, GuestSingleResponse, [string, string]>({
     queryKey: ['guests', guestId ?? ''],
@@ -147,7 +148,7 @@ export function useCreateGuest(
       }),
     onSuccess: (data, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: ['events', eventId, 'guests'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -168,7 +169,7 @@ export function useUpdateGuest(
       }),
     onSuccess: (data, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: ['events', eventId, 'guests'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });

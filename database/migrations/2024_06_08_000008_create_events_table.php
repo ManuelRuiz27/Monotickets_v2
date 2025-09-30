@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -35,9 +36,7 @@ return new class extends Migration
             $table->foreign('organizer_user_id')->references('id')->on('users')->restrictOnDelete();
         });
 
-        Schema::table('events', function (Blueprint $table) {
-            $table->check('start_at < end_at');
-        });
+        DB::statement('ALTER TABLE `events` ADD CONSTRAINT `events_start_before_end_check` CHECK (start_at < end_at)');
     }
 
     /**
@@ -45,6 +44,13 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::hasTable('events')) {
+            try {
+                DB::statement('ALTER TABLE `events` DROP CHECK `events_start_before_end_check`');
+            } catch (\Throwable $e) {
+                // Constraint may not exist (older MySQL versions), ignore.
+            }
+        }
         Schema::dropIfExists('events');
     }
 };

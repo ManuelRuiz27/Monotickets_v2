@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  Box,
   Stack,
   TextField,
   MenuItem,
@@ -135,9 +136,10 @@ const CreateTenantDialog = ({ open, onClose, plans, onSubmit, isSubmitting = fal
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" component="form" onSubmit={handleSubmit}>
-      <DialogTitle>Crear tenant</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'contents' }}>
+        <DialogTitle>Crear tenant</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
         <TextField
           label="Nombre"
           value={formState.name}
@@ -234,15 +236,16 @@ const CreateTenantDialog = ({ open, onClose, plans, onSubmit, isSubmitting = fal
             inputProps={{ min: 0 }}
           />
         </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={isSubmitting}>
-          Cancelar
-        </Button>
-        <Button type="submit" variant="contained" disabled={isSubmitting || planOptions.length === 0}>
-          Crear
-        </Button>
-      </DialogActions>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose} disabled={isSubmitting}>
+            Cancelar
+          </Button>
+          <Button type="submit" variant="contained" disabled={isSubmitting || planOptions.length === 0}>
+            Crear
+          </Button>
+        </DialogActions>
+      </Box>
     </Dialog>
   );
 };

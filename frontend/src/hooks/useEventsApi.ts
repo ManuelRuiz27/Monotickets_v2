@@ -1,12 +1,7 @@
 import { useMemo } from 'react';
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationOptions,
-  type UseQueryOptions,
-} from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationOptions } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export type EventStatus = 'draft' | 'published' | 'archived';
 export type CheckinPolicy = 'single' | 'multiple';
@@ -107,7 +102,7 @@ function buildQueryString(filters: EventFilters): string {
 
 export function useEventsList(
   filters: EventFilters,
-  options?: UseQueryOptions<EventsListResponse, unknown, EventsListResponse, [string, EventFilters]>
+  options?: AppQueryOptions<EventsListResponse, EventsListResponse, [string, EventFilters]>,
 ): UseEventsListResult {
   const queryKey: [string, EventFilters] = useMemo(() => ['events', filters], [filters]);
 
@@ -117,7 +112,7 @@ export function useEventsList(
       const queryString = buildQueryString(filters);
       return apiFetch<EventsListResponse>(`/events?${queryString}`);
     },
-    keepPreviousData: true,
+    placeholderData: options?.placeholderData ?? keepPreviousData,
     ...options,
   });
 
@@ -135,7 +130,7 @@ export function useEventsList(
 
 export function useEvent(
   eventId: string | undefined,
-  options?: UseQueryOptions<EventSingleResponse, unknown, EventSingleResponse, [string, string]>
+  options?: AppQueryOptions<EventSingleResponse, EventSingleResponse, [string, string]>,
 ) {
   return useQuery<EventSingleResponse, unknown, EventSingleResponse, [string, string]>({
     queryKey: ['events', eventId ?? ''],
@@ -157,7 +152,7 @@ export function useCreateEvent(options?: UseMutationOptions<EventSingleResponse,
       }),
     onSuccess: (data: EventSingleResponse, variables: CreateEventPayload, context: unknown) => {
       void queryClient.invalidateQueries({ queryKey: ['events'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -179,7 +174,7 @@ export function useUpdateEvent(
     onSuccess: (data: EventSingleResponse, variables: UpdateEventPayload, context: unknown) => {
       void queryClient.invalidateQueries({ queryKey: ['events'] });
       void queryClient.invalidateQueries({ queryKey: ['events', eventId] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -202,7 +197,7 @@ export function useArchiveEvent(
       if (data?.data?.id) {
         void queryClient.invalidateQueries({ queryKey: ['events', data.data.id] });
       }
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -219,7 +214,7 @@ export function useDeleteEvent(options?: UseMutationOptions<null, unknown, { eve
       }),
     onSuccess: (data: null, variables: { eventId: string }, context: unknown) => {
       void queryClient.invalidateQueries({ queryKey: ['events'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });

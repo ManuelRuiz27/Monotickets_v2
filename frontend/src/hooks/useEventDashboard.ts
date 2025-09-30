@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export interface DashboardFilters {
   from?: string | null;
@@ -74,7 +75,7 @@ function buildDashboardQueryString(filters: DashboardFilters): string {
 export function useEventDashboardOverview(
   eventId: string | undefined,
   filters: DashboardFilters,
-  options?: UseQueryOptions<DashboardOverviewResponse, unknown, DashboardOverviewResponse, [string, string, string, DashboardFilters]>,
+  options?: AppQueryOptions<DashboardOverviewResponse, DashboardOverviewResponse, [string, string, string, DashboardFilters]>,
 ) {
   const queryKey: [string, string, string, DashboardFilters] = useMemo(
     () => ['events', eventId ?? '', 'dashboard-overview', filters],
@@ -96,7 +97,7 @@ export function useEventDashboardOverview(
 export function useEventDashboardAttendanceByHour(
   eventId: string | undefined,
   filters: DashboardFilters,
-  options?: UseQueryOptions<AttendanceByHourResponse, unknown, AttendanceByHourResponse, [string, string, string, DashboardFilters]>,
+  options?: AppQueryOptions<AttendanceByHourResponse, AttendanceByHourResponse, [string, string, string, DashboardFilters]>,
 ) {
   const queryKey: [string, string, string, DashboardFilters] = useMemo(
     () => ['events', eventId ?? '', 'dashboard-attendance-by-hour', filters],
@@ -118,7 +119,7 @@ export function useEventDashboardAttendanceByHour(
 export function useEventDashboardCheckpointTotals(
   eventId: string | undefined,
   filters: DashboardFilters,
-  options?: UseQueryOptions<CheckpointTotalsResponse, unknown, CheckpointTotalsResponse, [string, string, string, DashboardFilters]>,
+  options?: AppQueryOptions<CheckpointTotalsResponse, CheckpointTotalsResponse, [string, string, string, DashboardFilters]>,
 ) {
   const queryKey: [string, string, string, DashboardFilters] = useMemo(
     () => ['events', eventId ?? '', 'dashboard-checkpoint-totals', filters],
@@ -139,7 +140,7 @@ export function useEventDashboardCheckpointTotals(
 
 export function useEventDashboardRsvpFunnel(
   eventId: string | undefined,
-  options?: UseQueryOptions<RsvpFunnelResponse, unknown, RsvpFunnelResponse, [string, string, string]>,
+  options?: AppQueryOptions<RsvpFunnelResponse, RsvpFunnelResponse, [string, string, string]>,
 ) {
   return useQuery<RsvpFunnelResponse, unknown, RsvpFunnelResponse, [string, string, string]>({
     queryKey: ['events', eventId ?? '', 'dashboard-rsvp-funnel'],
@@ -151,7 +152,7 @@ export function useEventDashboardRsvpFunnel(
 
 export function useEventDashboardGuestsByList(
   eventId: string | undefined,
-  options?: UseQueryOptions<GuestsByListResponse, unknown, GuestsByListResponse, [string, string, string]>,
+  options?: AppQueryOptions<GuestsByListResponse, GuestsByListResponse, [string, string, string]>,
 ) {
   return useQuery<GuestsByListResponse, unknown, GuestsByListResponse, [string, string, string]>({
     queryKey: ['events', eventId ?? '', 'dashboard-guests-by-list'],
@@ -160,4 +161,3 @@ export function useEventDashboardGuestsByList(
     ...options,
   });
 }
-

@@ -7,10 +7,11 @@ $defaultOrigins = implode(',', array_filter([
     'http://localhost',
     'http://localhost:3000',
     'http://localhost:5173',
+    'http://localhost:5174',
 ]));
 
 return [
-    'paths' => ['api/*'],
+    'paths' => ['api/*', 'auth/*'],
 
     'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 

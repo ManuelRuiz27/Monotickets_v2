@@ -68,7 +68,7 @@ class LimitsService
                 $this->assertWithinLimit(
                     $limits,
                     'max_scans_per_event',
-                    fn () use ($tenant, $eventId): int => $this->usageService->currentValue(
+                    fn (): int => $this->usageService->currentValue(
                         $tenant,
                         UsageCounter::KEY_SCAN_COUNT,
                         ['event_id' => $eventId]

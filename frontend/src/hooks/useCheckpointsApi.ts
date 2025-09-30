@@ -1,13 +1,8 @@
 import { useMemo } from 'react';
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationOptions,
-  type UseQueryOptions,
-} from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationOptions } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
 import type { VenuesListResponse, VenueResource } from './useVenuesApi';
+import type { AppQueryOptions } from './queryTypes';
 
 export interface CheckpointResource {
   id: string;
@@ -60,9 +55,8 @@ export function useVenueCheckpoints(
   eventId: string | undefined,
   venueId: string | undefined,
   filters: CheckpointFilters,
-  options?: UseQueryOptions<
+  options?: AppQueryOptions<
     CheckpointsListResponse,
-    unknown,
     CheckpointsListResponse,
     [string, string, string, string, string, CheckpointFilters]
   >,
@@ -86,7 +80,7 @@ export function useVenueCheckpoints(
       );
     },
     enabled: Boolean(eventId) && Boolean(venueId),
-    keepPreviousData: true,
+    placeholderData: options?.placeholderData ?? keepPreviousData,
     ...options,
   });
 }
@@ -113,7 +107,7 @@ export function useCreateCheckpoint(
       void queryClient.invalidateQueries({
         queryKey: ['events', eventId, 'venues', venueId, 'checkpoints'],
       });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -148,7 +142,7 @@ export function useUpdateCheckpoint(
       void queryClient.invalidateQueries({
         queryKey: ['events', eventId, 'venues', venueId, 'checkpoints'],
       });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -171,7 +165,7 @@ export function useDeleteCheckpoint(
       void queryClient.invalidateQueries({
         queryKey: ['events', eventId, 'venues', venueId, 'checkpoints'],
       });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -179,12 +173,9 @@ export function useDeleteCheckpoint(
 
 export function useEventCheckpoints(
   eventId: string | undefined,
-  options?: Omit<
-    UseQueryOptions<EventCheckpointResource[], unknown, EventCheckpointResource[], [string, string, string]>,
-    'queryKey' | 'queryFn'
-  >,
+  options?: AppQueryOptions<EventCheckpointResource[], EventCheckpointResource[], [string, string, string, string]>,
 ) {
-  return useQuery<EventCheckpointResource[], unknown, EventCheckpointResource[], [string, string, string]>({
+  return useQuery<EventCheckpointResource[], unknown, EventCheckpointResource[], [string, string, string, string]>({
     queryKey: ['events', eventId ?? '', 'checkpoints', 'all'],
     queryFn: async () => {
       if (!eventId) {

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export interface AdminAnalyticsFilters {
   tenantId?: string | null;
@@ -75,7 +76,7 @@ function buildQueryString(filters: AdminAnalyticsFilters): string {
 
 export function useAdminAnalytics(
   filters: AdminAnalyticsFilters,
-  options?: UseQueryOptions<AdminAnalyticsResponse, unknown, AdminAnalyticsResponse, AdminAnalyticsQueryKey>,
+  options?: AppQueryOptions<AdminAnalyticsResponse, AdminAnalyticsResponse, AdminAnalyticsQueryKey>,
 ) {
   const queryKey: AdminAnalyticsQueryKey = useMemo(() => ['admin-analytics', filters], [filters]);
 
@@ -86,7 +87,7 @@ export function useAdminAnalytics(
       const suffix = queryString ? `?${queryString}` : '';
       return apiFetch<AdminAnalyticsResponse>(`/admin/analytics${suffix}`);
     },
-    keepPreviousData: true,
+    placeholderData: options?.placeholderData ?? keepPreviousData,
     ...options,
   });
 }

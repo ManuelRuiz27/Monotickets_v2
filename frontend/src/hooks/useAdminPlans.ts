@@ -1,5 +1,6 @@
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export interface AdminPlan {
   id: string;
@@ -18,7 +19,7 @@ export interface AdminPlansResponse {
 type AdminPlansQueryKey = ['admin', 'plans'];
 
 export function useAdminPlans(
-  options?: UseQueryOptions<AdminPlansResponse, unknown, AdminPlansResponse, AdminPlansQueryKey>,
+  options?: AppQueryOptions<AdminPlansResponse, AdminPlansResponse, AdminPlansQueryKey>,
 ) {
   const queryKey: AdminPlansQueryKey = ['admin', 'plans'];
 

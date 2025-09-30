@@ -47,7 +47,7 @@ export function useUpdateTenantBranding(
       }),
     onSuccess: (data, variables, context) => {
       queryClient.setQueryData(['tenant', 'branding'], data);
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });

@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
   type UseMutationOptions,
-  type UseQueryOptions,
 } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export interface VenueResource {
   id: string;
@@ -57,7 +58,7 @@ function buildQueryString(filters: VenueFilters): string {
 export function useEventVenues(
   eventId: string | undefined,
   filters: VenueFilters,
-  options?: UseQueryOptions<VenuesListResponse, unknown, VenuesListResponse, [string, string, string, VenueFilters]>,
+  options?: AppQueryOptions<VenuesListResponse, VenuesListResponse, [string, string, string, VenueFilters]>,
 ) {
   const queryKey: [string, string, string, VenueFilters] = useMemo(
     () => ['events', eventId ?? '', 'venues', filters],
@@ -71,7 +72,7 @@ export function useEventVenues(
       return apiFetch<VenuesListResponse>(`/events/${eventId}/venues?${queryString}`);
     },
     enabled: Boolean(eventId),
-    keepPreviousData: true,
+    placeholderData: options?.placeholderData ?? keepPreviousData,
     ...options,
   });
 }
@@ -79,7 +80,7 @@ export function useEventVenues(
 export function useVenue(
   eventId: string | undefined,
   venueId: string | undefined,
-  options?: UseQueryOptions<VenueSingleResponse, unknown, VenueSingleResponse, [string, string, string, string]>,
+  options?: AppQueryOptions<VenueSingleResponse, VenueSingleResponse, [string, string, string, string]>,
 ) {
   return useQuery<VenueSingleResponse, unknown, VenueSingleResponse, [string, string, string, string]>({
     queryKey: ['events', eventId ?? '', 'venues', venueId ?? ''],
@@ -104,7 +105,7 @@ export function useCreateVenue(
       }),
     onSuccess: (data: VenueSingleResponse, variables: VenuePayload, context: unknown) => {
       void queryClient.invalidateQueries({ queryKey: ['events', eventId, 'venues'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -129,7 +130,7 @@ export function useUpdateVenue(
       context: unknown,
     ) => {
       void queryClient.invalidateQueries({ queryKey: ['events', eventId, 'venues'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -149,9 +150,8 @@ export function useDeleteVenue(
       }),
     onSuccess: (data: null, variables: { venueId: string }, context: unknown) => {
       void queryClient.invalidateQueries({ queryKey: ['events', eventId, 'venues'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
 }
-

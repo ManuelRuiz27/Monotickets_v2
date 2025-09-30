@@ -15,7 +15,7 @@ use App\Models\Venue;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Str;
 use Tests\Concerns\CreatesUsers;
 use Tests\TestCase;
@@ -554,7 +554,7 @@ class ScanFeatureTest extends TestCase
         $secondPayload = array_merge($payload, ['device_id' => 'concurrent-2']);
         $secondResponse = null;
 
-        Event::listen('eloquent.creating: '.Attendance::class, function () use (&$secondResponse, $hostess, $secondPayload): void {
+        EventFacade::listen('eloquent.creating: '.Attendance::class, function () use (&$secondResponse, $hostess, $secondPayload): void {
             static $hasRun = false;
 
             if ($hasRun) {

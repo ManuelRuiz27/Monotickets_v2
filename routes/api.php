@@ -30,6 +30,15 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VenueController;
 use App\Http\Middleware\ResolveTenant;
 
+Route::get('/', function () {
+    return response()->json([
+        'name' => config('app.name', 'Monotickets'),
+        'version' => 'v1',
+        'status' => 'ok',
+        'timestamp' => now()->toIso8601String(),
+    ]);
+});
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -40,6 +49,14 @@ use App\Http\Middleware\ResolveTenant;
 */
 
 Route::middleware('api')->group(function (): void {
+    Route::options('{any}', function () {
+        return response()->noContent();
+    })->where('any', '.*');
+
+    Route::options('auth/{any}', function () {
+        return response()->noContent();
+    })->where('any', '.*');
+
     Route::prefix('auth')
         ->withoutMiddleware([ResolveTenant::class])
         ->group(function (): void {

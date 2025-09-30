@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient, type UseMutationOptions, type UseQueryOptions } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseMutationOptions } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export type ImportSource = 'csv' | 'xlsx' | 'api';
 
@@ -48,7 +49,7 @@ export function useCreateImport(
       }),
     onSuccess: (data, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: ['events', eventId, 'imports'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...restOptions,
   });
@@ -56,7 +57,7 @@ export function useCreateImport(
 
 export function useImport(
   importId: string | undefined,
-  options?: UseQueryOptions<ImportResponse, unknown, ImportResponse, [string, string]>,
+  options?: AppQueryOptions<ImportResponse, ImportResponse, [string, string]>,
 ) {
   return useQuery<ImportResponse, unknown, ImportResponse, [string, string]>({
     queryKey: ['imports', importId ?? ''],

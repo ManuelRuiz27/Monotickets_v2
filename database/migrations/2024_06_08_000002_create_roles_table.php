@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('roles', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->ulid('tenant_id')->nullable();
-            $table->enum('code', ['superadmin', 'organizer', 'hostess']);
+            $table->enum('code', ['superadmin', 'organizer', 'hostess', 'tenant_owner']);
             $table->string('name');
             $table->text('description')->nullable();
             $table->timestamps();

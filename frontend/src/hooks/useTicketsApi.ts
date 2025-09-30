@@ -1,12 +1,7 @@
 import { useMemo } from 'react';
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationOptions,
-  type UseQueryOptions,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseMutationOptions } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export type TicketStatus = 'issued' | 'used' | 'revoked' | 'expired';
 
@@ -62,7 +57,7 @@ export interface TicketPayload {
 
 export function useGuestTickets(
   guestId: string | undefined,
-  options?: UseQueryOptions<TicketListResponse, unknown, TicketListResponse, [string, string, string]>,
+  options?: AppQueryOptions<TicketListResponse, TicketListResponse, [string, string, string]>,
 ) {
   const queryKey: [string, string, string] = useMemo(
     () => ['guests', guestId ?? '', 'tickets'],
@@ -92,7 +87,7 @@ export function useIssueTicket(
       }),
     onSuccess: (data, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: ['guests', guestId, 'tickets'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...rest,
   });
@@ -113,7 +108,7 @@ export function useUpdateTicket(
       }),
     onSuccess: (data, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: ['guests', guestId, 'tickets'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...rest,
   });
@@ -133,7 +128,7 @@ export function useDeleteTicket(
       }),
     onSuccess: (data, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: ['guests', guestId, 'tickets'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...rest,
   });
@@ -141,10 +136,7 @@ export function useDeleteTicket(
 
 export function useTicketQr(
   ticketId: string | undefined,
-  options?: Omit<
-    UseQueryOptions<QrSingleResponse, unknown, QrSingleResponse, [string, string, string]>,
-    'queryKey' | 'queryFn'
-  >,
+  options?: AppQueryOptions<QrSingleResponse, QrSingleResponse, [string, string, string]>,
 ) {
   const queryKey: [string, string, string] = useMemo(
     () => ['tickets', ticketId ?? '', 'qr'],
@@ -174,9 +166,8 @@ export function useRotateTicketQr(
     onSuccess: (data, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: ['guests', guestId, 'tickets'] });
       void queryClient.invalidateQueries({ queryKey: ['tickets', variables.ticketId, 'qr'] });
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, context, undefined as never);
     },
     ...rest,
   });
 }
-

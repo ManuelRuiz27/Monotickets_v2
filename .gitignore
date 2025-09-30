@@ -1,0 +1,33 @@
+# Environment
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+
+# Dependencies
+/vendor/
+/node_modules/
+/frontend/node_modules/
+
+# Build artifacts
+/public/storage
+/storage/app/
+/storage/framework/
+/storage/logs/
+/frontend/dist/
+/frontend/.vite*
+
+# Cache & logs
+.phpunit.result.cache
+*.log
+.DS_Store
+
+# Editors / tooling
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Misc
+*.pid
+*.seed

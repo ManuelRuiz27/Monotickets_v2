@@ -63,7 +63,31 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
    ```powershell
    docker compose ps
    ```
-5. Acceder a la API en `http://localhost:8000` (puerto según configuración del `docker-compose.yml`).
+5. Las migraciones incluyen las tablas para colas (`jobs` y `failed_jobs`). Tras sembrar la base deberías poder revisar la API en `http://localhost:8000`.
+
+### 1.5. Poner en marcha el frontend
+
+1. Copiar el archivo de entorno de ejemplo del frontend:
+   ```powershell
+   copy frontend\.env.example frontend\.env
+   ```
+   Ajusta `VITE_FINGERPRINT_ENCRYPTION_KEY` con la misma clave que configuraste en el backend y, si es necesario, `VITE_API_URL` (por defecto apunta a `http://localhost:8000/api`).
+2. Instalar dependencias y arrancar Vite en modo desarrollo:
+   ```powershell
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   El panel quedará disponible en `http://localhost:5173` (o el puerto que Vite indique en consola).
+3. Credenciales de demo generadas por el seeder:
+   - `superadmin@demo.test` / `DemoPassword123!`
+   - `organizer1@demo.test` / `DemoPassword123!`
+   - `organizer2@demo.test` / `DemoPassword123!`
+   - `hostess@demo.test` / `DemoPassword123!`
+   - `owner@demo.test` / `DemoPassword123!`
+   Puedes usar cualquiera para iniciar sesión en el frontend.
+
+4. (Opcional) Para detener el servidor de Vite, usa `Ctrl + C` en la terminal donde esté ejecutándose.
 
 ### 1.4. Tareas de desarrollo comunes
 
@@ -147,7 +171,7 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
    ```bash
    docker compose exec app composer install
    ```
-3. Ejecutar migraciones y *seeders*:
+3. Ejecutar migraciones y *seeders* (las tablas `jobs` y `failed_jobs` se crean automáticamente):
    ```bash
    docker compose exec app php artisan migrate --seed
    ```
@@ -170,6 +194,26 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
   ```bash
   docker compose down
   ```
+
+### 2.5. Frontend (Vite)
+
+1. Copiar el archivo de entorno de ejemplo y editarlo según sea necesario:
+   ```bash
+   cp frontend/.env.example frontend/.env
+   ```
+2. Instalar dependencias y lanzar el servidor de desarrollo:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+3. El panel quedará disponible en `http://localhost:5173`. Usa las credenciales de demo listadas en la sección 1.5.
+
+4. Para generar el build de producción:
+   ```bash
+   npm run build
+   npm run preview # opcional, para validar el build
+   ```
 
 ## Tareas programadas y mantenimiento
 
@@ -200,4 +244,3 @@ Las siguientes tareas automatizan procesos de facturación y cumplimiento. En en
 - Ajuste los puertos publicados en `docker-compose.yml` si los valores por defecto entran en conflicto con otros servicios.
 - Para entornos productivos se recomienda configurar HTTPS mediante un *reverse proxy* (por ejemplo, Nginx + Certbot) y servicios de monitorización.
 - Mantenga actualizadas las imágenes y dependencias ejecutando periódicamente `docker compose pull` y `composer update` (previa validación en entornos de prueba).
-

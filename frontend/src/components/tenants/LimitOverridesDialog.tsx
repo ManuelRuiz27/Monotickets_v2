@@ -1,5 +1,6 @@
 import { FormEvent, type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -188,9 +189,10 @@ const LimitOverridesDialog = ({ open, onClose, tenant, onSubmit, isSubmitting = 
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" component="form" onSubmit={handleSubmit}>
-      <DialogTitle>Modificar límites del tenant</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'contents' }}>
+        <DialogTitle>Modificar límites del tenant</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
         {tenant ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">{tenant.name ?? tenant.slug ?? tenant.id}</Typography>
@@ -211,15 +213,16 @@ const LimitOverridesDialog = ({ open, onClose, tenant, onSubmit, isSubmitting = 
             Selecciona un tenant para modificar sus límites.
           </Typography>
         )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={isSubmitting}>
-          Cancelar
-        </Button>
-        <Button type="submit" variant="contained" disabled={isSubmitting || !tenant}>
-          Guardar
-        </Button>
-      </DialogActions>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose} disabled={isSubmitting}>
+            Cancelar
+          </Button>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !tenant}>
+            Guardar
+          </Button>
+        </DialogActions>
+      </Box>
     </Dialog>
   );
 };

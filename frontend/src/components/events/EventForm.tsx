@@ -211,13 +211,18 @@ const EventForm = ({ eventId }: EventFormProps) => {
     }).format(totalDurationHours);
   }, [totalDurationHours]);
 
-  const handleChange = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormState((prev) => ({ ...prev, [key]: event.target.value }));
-    setErrors((prev) => ({ ...prev, [key]: undefined }));
-    if (key === 'startAt' || key === 'endAt') {
-      setTimezoneNotice(null);
-    }
-  };
+const handleChange = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  setFormState((prev) => ({ ...prev, [key]: event.target.value }));
+  setErrors((prev) => ({ ...prev, [key]: undefined }));
+  if (key === 'startAt' || key === 'endAt') {
+    setTimezoneNotice(null);
+  }
+};
+
+const handleSelectChange = (key: keyof FormState) => (event: SelectChangeEvent<string>) => {
+  setFormState((prev) => ({ ...prev, [key]: event.target.value }));
+  setErrors((prev) => ({ ...prev, [key]: undefined }));
+};
 
   const handleTimezoneChange = (event: SelectChangeEvent<string>) => {
     const newTimezone = event.target.value;
@@ -395,8 +400,9 @@ const EventForm = ({ eventId }: EventFormProps) => {
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 4 } }}>
-        <Stack spacing={3} component="form" onSubmit={handleSubmit}>
-          <Box display="flex" alignItems="center" justifyContent="space-between">
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
             <Stack spacing={1}>
               <Typography variant="h4" component="h1">
                 {isEditing ? 'Editar evento' : 'Nuevo evento'}
@@ -414,11 +420,11 @@ const EventForm = ({ eventId }: EventFormProps) => {
               {globalError}
             </Alert>
           )}
-          {eventError && (
+          {eventError ? (
             <Alert severity="error">
               {extractApiErrorMessage(eventError, 'No se pudo cargar la información del evento.')}
             </Alert>
-          )}
+          ) : null}
           {timezoneNotice && (
             <Alert severity="info" onClose={() => setTimezoneNotice(null)}>
               {timezoneNotice}
@@ -516,13 +522,15 @@ const EventForm = ({ eventId }: EventFormProps) => {
                   select
                   label="Zona horaria"
                   value={formState.timezone}
-                  onChange={handleTimezoneChange}
                   error={Boolean(errors.timezone)}
                   helperText={
                     errors.timezone ?? 'Selecciona una zona horaria IANA. Se preselecciona America/Mexico_City.'
                   }
                   required
                   fullWidth
+                  SelectProps={{
+                    onChange: (event) => handleTimezoneChange(event as SelectChangeEvent<string>),
+                  }}
                 >
                   {TIMEZONE_OPTIONS.map((timezone) => (
                     <MenuItem key={timezone} value={timezone}>
@@ -536,11 +544,13 @@ const EventForm = ({ eventId }: EventFormProps) => {
                   select
                   label="Estado"
                   value={formState.status}
-                  onChange={handleChange('status')}
                   error={Boolean(errors.status)}
                   helperText={errors.status ?? 'Controla la disponibilidad pública.'}
                   required
                   fullWidth
+                  SelectProps={{
+                    onChange: (event) => handleSelectChange('status')(event as SelectChangeEvent<string>),
+                  }}
                 >
                   {statusOptions.map(([value, label]) => (
                     <MenuItem key={value} value={value}>
@@ -575,11 +585,13 @@ const EventForm = ({ eventId }: EventFormProps) => {
                   select
                   label="Política de check-in"
                   value={formState.checkinPolicy}
-                  onChange={handleChange('checkinPolicy')}
                   error={Boolean(errors.checkinPolicy)}
                   helperText={errors.checkinPolicy ?? 'Define cómo se validan las entradas.'}
                   required
                   fullWidth
+                  SelectProps={{
+                    onChange: (event) => handleSelectChange('checkinPolicy')(event as SelectChangeEvent<string>),
+                  }}
                 >
                   {checkinOptions.map(([value, label]) => (
                     <MenuItem key={value} value={value}>
@@ -602,15 +614,16 @@ const EventForm = ({ eventId }: EventFormProps) => {
               </Grid>
             </Grid>
           )}
-          <Box display="flex" justifyContent="flex-end" gap={2}>
-            <Button variant="text" onClick={() => navigate('/events')} disabled={isSubmitting}>
-              Cancelar
-            </Button>
-            <Button type="submit" variant="contained" startIcon={<SaveIcon />} disabled={isSubmitting}>
-              {isSubmitting ? 'Guardando…' : 'Guardar'}
-            </Button>
-          </Box>
-        </Stack>
+            <Box display="flex" justifyContent="flex-end" gap={2}>
+              <Button variant="text" onClick={() => navigate('/events')} disabled={isSubmitting}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="contained" startIcon={<SaveIcon />} disabled={isSubmitting}>
+                {isSubmitting ? 'Guardando…' : 'Guardar'}
+              </Button>
+            </Box>
+          </div>
+        </form>
       </Paper>
     </Container>
   );

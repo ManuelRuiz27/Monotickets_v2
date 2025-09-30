@@ -1,5 +1,6 @@
 import { FormEvent, type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -156,9 +157,10 @@ const UpdateTenantPlanDialog = ({ open, onClose, tenant, plans, onSubmit, isSubm
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" component="form" onSubmit={handleSubmit}>
-      <DialogTitle>Actualizar plan y suscripción</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'contents' }}>
+        <DialogTitle>Actualizar plan y suscripción</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
         {tenant ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">{tenant.name ?? tenant.slug ?? tenant.id}</Typography>
@@ -241,15 +243,16 @@ const UpdateTenantPlanDialog = ({ open, onClose, tenant, plans, onSubmit, isSubm
             Selecciona un tenant para actualizar su plan.
           </Typography>
         )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={isSubmitting}>
-          Cancelar
-        </Button>
-        <Button type="submit" variant="contained" disabled={isSubmitting || !tenant}>
-          Guardar cambios
-        </Button>
-      </DialogActions>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose} disabled={isSubmitting}>
+            Cancelar
+          </Button>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !tenant}>
+            Guardar cambios
+          </Button>
+        </DialogActions>
+      </Box>
     </Dialog>
   );
 };

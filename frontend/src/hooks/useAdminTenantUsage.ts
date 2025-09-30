@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
 import type { AdminTenantSummary } from './useAdminTenants';
+import type { AppQueryOptions } from './queryTypes';
 
 export interface AdminTenantUsageBreakdownEntry {
   event_id: string;
@@ -53,7 +54,7 @@ const buildQueryString = (filters: AdminTenantUsageFilters): string => {
 export function useAdminTenantUsage(
   tenantId: string | undefined,
   filters: AdminTenantUsageFilters,
-  options?: UseQueryOptions<AdminTenantUsageResponse, unknown, AdminTenantUsageResponse, AdminTenantUsageKey>,
+  options?: AppQueryOptions<AdminTenantUsageResponse, AdminTenantUsageResponse, AdminTenantUsageKey>,
 ) {
   const queryKey: AdminTenantUsageKey = useMemo(
     () => ['admin', 'tenants', tenantId ?? 'unknown', 'usage', filters],
@@ -72,7 +73,7 @@ export function useAdminTenantUsage(
       const suffix = qs ? `?${qs}` : '';
       return apiFetch<AdminTenantUsageResponse>(`/admin/tenants/${tenantId}/usage${suffix}`);
     },
-    keepPreviousData: true,
+    placeholderData: options?.placeholderData ?? keepPreviousData,
     ...options,
   });
 }

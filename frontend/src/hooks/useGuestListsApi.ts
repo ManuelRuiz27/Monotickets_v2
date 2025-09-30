@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
+import type { AppQueryOptions } from './queryTypes';
 
 export interface GuestListResource {
   id: string;
@@ -37,7 +38,7 @@ function buildQueryString(filters: GuestListFilters): string {
 export function useEventGuestLists(
   eventId: string | undefined,
   filters: GuestListFilters,
-  options?: UseQueryOptions<GuestListsResponse, unknown, GuestListsResponse, [string, string, string, GuestListFilters]>,
+  options?: AppQueryOptions<GuestListsResponse, GuestListsResponse, [string, string, string, GuestListFilters]>,
 ) {
   const queryKey: [string, string, string, GuestListFilters] = useMemo(
     () => ['events', eventId ?? '', 'guest-lists', filters],
@@ -51,7 +52,7 @@ export function useEventGuestLists(
       return apiFetch<GuestListsResponse>(`/events/${eventId}/guest-lists?${queryString}`);
     },
     enabled: Boolean(eventId),
-    keepPreviousData: true,
+    placeholderData: options?.placeholderData ?? keepPreviousData,
     ...options,
   });
 }

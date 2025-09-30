@@ -16,6 +16,8 @@ use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
+    private const DEFAULT_PASSWORD = 'DemoPassword123!';
+
     /**
      * Seed the application's database.
      */
@@ -75,7 +77,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Super Admin',
             'email' => 'superadmin@demo.test',
             'phone' => '+1 555-0000',
-            'password_hash' => Hash::make('password'),
+            'password_hash' => Hash::make(self::DEFAULT_PASSWORD),
             'is_active' => true,
         ]);
 
@@ -85,8 +87,16 @@ class DatabaseSeeder extends Seeder
             ->count(2)
             ->for($tenant)
             ->state(new Sequence(
-                ['name' => 'Organizer One', 'email' => 'organizer1@demo.test'],
-                ['name' => 'Organizer Two', 'email' => 'organizer2@demo.test'],
+                [
+                    'name' => 'Organizer One',
+                    'email' => 'organizer1@demo.test',
+                    'password_hash' => Hash::make(self::DEFAULT_PASSWORD),
+                ],
+                [
+                    'name' => 'Organizer Two',
+                    'email' => 'organizer2@demo.test',
+                    'password_hash' => Hash::make(self::DEFAULT_PASSWORD),
+                ],
             ))
             ->create();
 
@@ -99,6 +109,7 @@ class DatabaseSeeder extends Seeder
             ->state([
                 'name' => 'Hostess Demo',
                 'email' => 'hostess@demo.test',
+                'password_hash' => Hash::make(self::DEFAULT_PASSWORD),
             ])
             ->create();
 
@@ -109,6 +120,7 @@ class DatabaseSeeder extends Seeder
             ->state([
                 'name' => 'Tenant Owner',
                 'email' => 'owner@demo.test',
+                'password_hash' => Hash::make(self::DEFAULT_PASSWORD),
             ])
             ->create();
 

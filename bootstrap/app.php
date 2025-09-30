@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
+        web: __DIR__ . '/../routes/web.php',
         api: __DIR__ . '/../routes/api.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -24,4 +25,3 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('tenants:anonymize-canceled')->dailyAt('03:00');
     })
     ->create();
-

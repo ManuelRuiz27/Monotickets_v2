@@ -96,8 +96,7 @@ function resolveResultMessage(result: string, fallback: string | null = null): s
 
 async function pruneAttendanceHistory(eventId: string | null, limit: number): Promise<void> {
   const allForEvent = await db.attendances_cache
-    .where('event_id')
-    .equals(eventId ?? null)
+    .filter((row) => (eventId === null ? row.event_id == null : row.event_id === eventId))
     .toArray();
 
   if (allForEvent.length <= limit) {

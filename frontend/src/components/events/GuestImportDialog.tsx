@@ -70,8 +70,8 @@ const GuestImportDialog = ({ eventId, open, onClose, onStatusChange }: GuestImpo
     isFetching,
   } = useImport(importId ?? undefined, {
     enabled: open && Boolean(importId),
-    refetchInterval: (data) => {
-      const status = data?.data.status;
+    refetchInterval: (query) => {
+      const status = query.state.data?.data.status;
       return status && shouldPoll(status) ? 4000 : false;
     },
   });

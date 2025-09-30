@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, type IScannerControls } from '@zxing/browser';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
+import { NotFoundException } from '@zxing/library';
 import { useMutation } from '@tanstack/react-query';
 import { DateTime } from 'luxon';
 import { type ScanRequest, type ScanResponsePayload } from '../../api/scan';
@@ -181,6 +182,26 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
     };
   }, []);
 
+  const resetReader = useCallback((reader: BrowserMultiFormatReader | null) => {
+    if (!reader) {
+      return;
+    }
+
+    const candidate = reader as BrowserMultiFormatReader & {
+      reset?: () => void;
+      stop?: () => void;
+      stopStreams?: () => void;
+    };
+
+    if (typeof candidate.reset === 'function') {
+      candidate.reset();
+    } else if (typeof candidate.stop === 'function') {
+      candidate.stop();
+    } else if (typeof candidate.stopStreams === 'function') {
+      candidate.stopStreams();
+    }
+  }, []);
+
   const handleScannedValue = useCallback(
     (rawValue: string) => {
       const normalized = rawValue.trim();
@@ -225,7 +246,7 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
 
   const stopCamera = useCallback(() => {
     controlsRef.current?.stop();
-    codeReaderRef.current?.reset();
+    resetReader(codeReaderRef.current);
     const videoElement = videoRef.current;
     if (videoElement) {
       const mediaStream = videoElement.srcObject as MediaStream | null;
@@ -357,7 +378,7 @@ const QrScanner = ({ eventId, checkpointId, deviceId, debounceMs = DEFAULT_DEBOU
 
     const codeReader = codeReaderRef.current;
     controlsRef.current?.stop();
-    codeReader.reset();
+    resetReader(codeReader);
 
     let mediaStream: MediaStream | null = null;
     try {
