@@ -25,6 +25,10 @@
             "Tests\\": "tests/"
         }
     },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test:fast": "vendor/bin/phpunit --testsuite=Unit"
+    },
     "minimum-stability": "stable",
     "prefer-stable": true
 }
