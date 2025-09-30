@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
   Grid,
@@ -11,11 +12,12 @@ import {
   Tab,
   Tabs,
   Typography,
+  LinearProgress,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { DateTime } from 'luxon';
 import { useNavigate } from 'react-router-dom';
-import { CHECKIN_POLICY_LABELS, type CheckinPolicy, useEvent } from '../../hooks/useEventsApi';
+import { CHECKIN_POLICY_LABELS, type CheckinPolicy, type EventResource, useEvent } from '../../hooks/useEventsApi';
 import { extractApiErrorMessage } from '../../utils/apiErrors';
 import EventGuestsTab from './EventGuestsTab';
 import EventVenuesTab from './EventVenuesTab';
@@ -62,23 +64,124 @@ const formatCapacity = (capacity: number | null | undefined) => {
   return capacity.toLocaleString();
 };
 
-const formatOccupancy = (capacity: number | null | undefined) => {
-  if (capacity === null || capacity === undefined) {
-    return 'No disponible sin capacidad definida.';
+const resolveOccupancyRatio = (event: EventResource | null | undefined): number | null => {
+  if (!event) {
+    return null;
   }
 
-  const formattedCapacity = capacity.toLocaleString();
-  return `0% (0 de ${formattedCapacity} lugares)`;
+  const ratio = typeof event.occupancy_percent === 'number'
+    ? event.occupancy_percent
+    : event.capacity && event.capacity > 0 && typeof event.capacity_used === 'number'
+      ? event.capacity_used / event.capacity
+      : null;
+
+  if (ratio === null || Number.isNaN(ratio)) {
+    return null;
+  }
+
+  return Math.max(0, ratio);
 };
 
-const DetailItem = ({ label, value }: { label: string; value: ReactNode }) => (
-  <Box>
-    <Typography variant="subtitle2" color="text.secondary">
-      {label}
-    </Typography>
-    <Typography variant="body1">{value ?? '—'}</Typography>
-  </Box>
-);
+const resolveOccupancyUsage = (event: EventResource | null | undefined) => {
+  const used = event?.capacity_used ?? event?.attendances_count ?? null;
+  const capacity = event?.capacity ?? null;
+  return { used, capacity };
+};
+
+const formatOccupancyLabel = (event: EventResource | null | undefined, percent: number | null) => {
+  const { used, capacity } = resolveOccupancyUsage(event);
+
+  if (percent === null) {
+    if (used !== null) {
+      return `${used.toLocaleString()} asistentes registrados`;
+    }
+    return 'Sin datos suficientes';
+  }
+
+  if (capacity && used !== null) {
+    return `${percent}% (${used.toLocaleString()} de ${capacity.toLocaleString()} lugares)`;
+  }
+
+  return `${percent}% de ocupación estimada`;
+};
+
+const resolveOccupancyColor = (ratio: number | null): 'primary' | 'success' | 'warning' | 'error' => {
+  if (ratio === null) {
+    return 'primary';
+  }
+
+  if (ratio < 0.6) {
+    return 'success';
+  }
+
+  if (ratio < 0.85) {
+    return 'warning';
+  }
+
+  return 'error';
+};
+
+const DetailItem = ({ label, value }: { label: string; value: ReactNode }) => {
+  const renderValue = () => {
+    if (value === null || value === undefined) {
+      return <Typography variant="body1">—</Typography>;
+    }
+
+    if (typeof value === 'string' || typeof value === 'number') {
+      return <Typography variant="body1">{value}</Typography>;
+    }
+
+    return value;
+  };
+
+  return (
+    <Box>
+      <Typography variant="subtitle2" color="text.secondary">
+        {label}
+      </Typography>
+      {renderValue()}
+    </Box>
+  );
+};
+
+const OccupancyIndicator = ({ event }: { event: EventResource }) => {
+  const ratio = resolveOccupancyRatio(event);
+  const percent = ratio !== null ? Math.min(100, Math.round(ratio * 100)) : null;
+  const label = formatOccupancyLabel(event, percent);
+  const { used, capacity } = resolveOccupancyUsage(event);
+  const color = resolveOccupancyColor(ratio);
+
+  if (percent === null) {
+    return (
+      <Typography variant="body1" color="text.secondary">
+        {label}
+      </Typography>
+    );
+  }
+
+  return (
+    <Stack spacing={1} aria-label={`Ocupación del evento ${event.name}`}>
+      <LinearProgress
+        variant="determinate"
+        value={percent}
+        color={color}
+        sx={{ height: 10, borderRadius: 999, bgcolor: 'action.selected' }}
+        aria-hidden
+      />
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Stack direction="row" spacing={1} flexWrap="wrap">
+        {used !== null && (
+          <Chip size="small" color="secondary" label={`Asistencias: ${used.toLocaleString()}`} />
+        )}
+        {capacity !== null && (
+          <Chip size="small" variant="outlined" label={`Capacidad: ${capacity.toLocaleString()}`} />
+        )}
+      </Stack>
+    </Stack>
+  );
+};
 
 const EventDetail = ({ eventId }: EventDetailProps) => {
   const navigate = useNavigate();
@@ -163,7 +266,7 @@ const EventDetail = ({ eventId }: EventDetailProps) => {
             <DetailItem label="Capacidad" value={formatCapacity(eventData.capacity)} />
           </Grid>
           <Grid item xs={12} md={6}>
-            <DetailItem label="Ocupación" value={formatOccupancy(eventData.capacity)} />
+            <DetailItem label="Ocupación" value={<OccupancyIndicator event={eventData} />} />
           </Grid>
           <Grid item xs={12} md={6}>
             <DetailItem

@@ -869,6 +869,23 @@ textarea::placeholder {
   text-decoration: underline;
 }
 
+.sync-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.sync-status__timestamp {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.sync-status__alert {
+  margin-top: 0.75rem;
+}
+
 .scan-history {
   display: grid;
   gap: 1rem;

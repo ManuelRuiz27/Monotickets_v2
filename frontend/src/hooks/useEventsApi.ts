@@ -22,6 +22,10 @@ export interface EventResource {
   settings_json: Record<string, unknown> | null;
   created_at?: string | null;
   updated_at?: string | null;
+  attendances_count?: number;
+  tickets_issued?: number;
+  capacity_used?: number;
+  occupancy_percent?: number | null;
 }
 
 export interface EventsListResponse {
