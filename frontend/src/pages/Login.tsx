@@ -11,6 +11,7 @@ interface LoginResponse {
     email: string;
     role: 'organizer' | 'superadmin' | string;
     tenantId?: string;
+    roles?: string[];
   };
 }
 

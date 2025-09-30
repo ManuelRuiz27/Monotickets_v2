@@ -36,18 +36,28 @@ class HostessAssignmentMeController extends Controller
             ]);
         }
 
-        $event = Event::query()->where('tenant_id', $tenantId)->find($payload['event_id']);
+        $eventId = $payload['event_id'] ?? null;
+        $event = null;
 
-        if ($event === null) {
-            return ApiResponse::error('NOT_FOUND', 'The requested event was not found.', null, 404);
+        if ($eventId !== null) {
+            $event = Event::query()->where('tenant_id', $tenantId)->find($eventId);
+
+            if ($event === null) {
+                return ApiResponse::error('NOT_FOUND', 'The requested event was not found.', null, 404);
+            }
         }
 
-        $assignments = HostessAssignment::query()
+        $assignmentsQuery = HostessAssignment::query()
             ->with(['hostess', 'event', 'venue', 'checkpoint'])
             ->forTenant($tenantId)
             ->where('hostess_user_id', $authUser->id)
-            ->where('event_id', $event->id)
-            ->currentlyActive()
+            ->currentlyActive();
+
+        if ($event !== null) {
+            $assignmentsQuery->where('event_id', $event->id);
+        }
+
+        $assignments = $assignmentsQuery
             ->orderBy('starts_at')
             ->get();
 

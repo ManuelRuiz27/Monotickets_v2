@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\AuditLog;
+use App\Models\Role;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -65,6 +66,7 @@ class LoginController extends Controller
         }
 
         $user->forceFill(['last_login_at' => now()])->save();
+        $user->loadMissing('roles');
 
         AuditLog::create([
             'tenant_id' => $user->tenant_id,
@@ -81,12 +83,14 @@ class LoginController extends Controller
         ]);
 
         return response()->json([
+            'token' => $accessToken,
             'access_token' => $accessToken,
             'token_type' => 'Bearer',
             'expires_in' => $accessTtl * 60,
             'refresh_token' => $refreshToken,
             'refresh_expires_in' => $refreshTtl * 60,
             'session_id' => $session->id,
+            'user' => $this->buildUserPayload($request, $user),
         ]);
     }
 
@@ -128,5 +132,43 @@ class LoginController extends Controller
             'ua' => (string) $request->userAgent(),
             'occurred_at' => CarbonImmutable::now(),
         ]);
+    }
+
+    /**
+     * Build a user payload for authentication responses.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildUserPayload(LoginRequest $request, User $user): array
+    {
+        $primaryRole = $user->roles->first()?->code ?? 'guest';
+
+        return [
+            'id' => (string) $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $primaryRole,
+            'roles' => $user->roles->pluck('code')->values()->all(),
+            'tenantId' => $this->resolveTenantForResponse($request, $user),
+        ];
+    }
+
+    private function resolveTenantForResponse(LoginRequest $request, User $user): ?string
+    {
+        $headerTenant = $request->header('X-Tenant-ID');
+
+        if (is_string($headerTenant) && $headerTenant !== '') {
+            $isSuperAdmin = $user->roles->contains(fn (Role $role) => $role->code === 'superadmin');
+
+            if ($isSuperAdmin) {
+                return $headerTenant;
+            }
+
+            if ($user->tenant_id !== null && (string) $user->tenant_id === $headerTenant) {
+                return $headerTenant;
+            }
+        }
+
+        return $user->tenant_id !== null ? (string) $user->tenant_id : null;
     }
 }

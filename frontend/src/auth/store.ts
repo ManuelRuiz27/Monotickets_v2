@@ -9,6 +9,7 @@ export interface AuthUser {
   email: string;
   role: Role;
   tenantId?: string;
+  roles?: Role[];
 }
 
 interface AuthState {

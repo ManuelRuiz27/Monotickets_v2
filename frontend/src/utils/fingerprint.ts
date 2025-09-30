@@ -86,14 +86,25 @@ export function resolveDeviceName(): string {
 
 export function resolveDevicePlatform(): string {
   if (typeof navigator === 'undefined') {
-    return 'unknown';
+    return 'web';
   }
 
+  const ua = navigator.userAgent.toLowerCase();
   const userAgentData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+  const platformHint = userAgentData?.platform?.toLowerCase();
 
-  if (userAgentData?.platform) {
-    return userAgentData.platform;
+  if (platformHint === 'android' || ua.includes('android')) {
+    return 'android';
   }
 
-  return navigator.platform ?? 'unknown';
+  if (
+    platformHint === 'ios' ||
+    ua.includes('iphone') ||
+    ua.includes('ipad') ||
+    ua.includes('ipod')
+  ) {
+    return 'ios';
+  }
+
+  return 'web';
 }

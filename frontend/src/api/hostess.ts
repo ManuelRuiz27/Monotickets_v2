@@ -15,8 +15,13 @@ interface DeviceResponse {
   data: HostessDevice;
 }
 
-export async function fetchHostessAssignments(): Promise<HostessAssignment[]> {
-  const response = await apiFetch<AssignmentsResponse>('/me/assignments');
+export async function fetchHostessAssignments(eventId?: string | null): Promise<HostessAssignment[]> {
+  const query = new URLSearchParams();
+  if (eventId) {
+    query.set('event_id', eventId);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const response = await apiFetch<AssignmentsResponse>(`/me/assignments${suffix}`);
   return response.data;
 }
 

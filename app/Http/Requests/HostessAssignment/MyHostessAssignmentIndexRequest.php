@@ -15,7 +15,7 @@ class MyHostessAssignmentIndexRequest extends ApiFormRequest
     public function rules(): array
     {
         return [
-            'event_id' => ['required', 'string', 'uuid', 'exists:events,id'],
+            'event_id' => ['sometimes', 'string', 'uuid', 'exists:events,id'],
         ];
     }
 }
