@@ -1,98 +1,189 @@
+version: "3.9"
+
+x-laravel-env: &laravel-env
+  APP_ENV: ${APP_ENV:-production}
+  APP_DEBUG: ${APP_DEBUG:-false}
+  APP_URL: ${APP_URL:-http://localhost:8080}
+  APP_KEY: ${APP_KEY:-}
+  LOG_CHANNEL: stdout
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DB_CONNECTION: mysql
+  DB_HOST: db
+  DB_PORT: 3306
+  DB_DATABASE: ${DB_DATABASE:-monotickets}
+  DB_USERNAME: ${DB_USERNAME:-monotickets}
+  DB_PASSWORD: ${DB_PASSWORD:-secret}
+  QUEUE_CONNECTION: redis
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  SESSION_LIFETIME: ${SESSION_LIFETIME:-120}
 
 services:
   app:
-    image: thecodingmachine/php:8.2-v4-cli
-    working_dir: /var/www/html
-    volumes:
-      - ./:/var/www/html
-    ports:
-      - "8000:8000"
+    build:
+      context: .
+      target: production
+    image: monotickets-api
+    restart: unless-stopped
     environment:
-      APP_ENV: local
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:8000
-      DB_CONNECTION: mysql
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_DATABASE: ${DB_DATABASE}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-      QUEUE_CONNECTION: database
-    env_file:
-      - .env
+      <<: *laravel-env
     depends_on:
       db:
         condition: service_healthy
-    command: >
-      bash -lc "rm -f storage/framework/.migrated && until php -r \"mysqli_report(MYSQLI_REPORT_OFF); exit((int)!@mysqli_connect(getenv('DB_HOST'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'), null, (int)(getenv('DB_PORT') ?: 3306)));\"; do sleep 2; done && composer install && php artisan key:generate --force && php artisan migrate --force && touch storage/framework/.migrated && php artisan serve --host=0.0.0.0 --port=8000"
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          php -r "try { new PDO('mysql:host=' . getenv('DB_HOST') . ';port=' . getenv('DB_PORT') . ';dbname=' . getenv('DB_DATABASE'), getenv('DB_USERNAME'), getenv('DB_PASSWORD')); } catch (Throwable $e) { fwrite(STDERR, $e->getMessage()); exit(1); }"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    expose:
+      - "9000"
+    profiles:
+      - dev
+      - prod
+
+  web:
+    build:
+      context: .
+      target: nginx
+    image: monotickets-api-nginx
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8080}:80"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost/up > /dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - dev
+      - prod
 
   queue:
-    image: thecodingmachine/php:8.2-v4-cli
-    working_dir: /var/www/html
-    volumes:
-      - ./:/var/www/html
+    build:
+      context: .
+      target: production
+    image: monotickets-queue
+    restart: unless-stopped
+    command: ["supervisord", "-c", "/etc/supervisor/conf.d/queue.conf"]
     environment:
-      APP_ENV: local
-      APP_DEBUG: "true"
-      DB_CONNECTION: mysql
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_DATABASE: ${DB_DATABASE}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-      QUEUE_CONNECTION: database
-    env_file:
-      - .env
+      <<: *laravel-env
     depends_on:
-      db:
-        condition: service_healthy
       app:
-        condition: service_started
-    command: >
-      bash -lc "while [ ! -f vendor/autoload.php ]; do sleep 2; done; while [ ! -f storage/framework/.migrated ]; do sleep 2; done; php artisan queue:work --verbose --tries=3 --timeout=90"
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - supervisorctl -c /etc/supervisor/conf.d/queue.conf status | grep -q RUNNING
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - dev
+      - prod
 
   scheduler:
-    image: thecodingmachine/php:8.2-v4-cli
-    working_dir: /var/www/html
-    volumes:
-      - ./:/var/www/html
+    build:
+      context: .
+      target: production
+    image: monotickets-scheduler
+    restart: unless-stopped
+    command: ["supervisord", "-c", "/etc/supervisor/conf.d/scheduler.conf"]
     environment:
-      APP_ENV: local
-      APP_DEBUG: "true"
-      DB_CONNECTION: mysql
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_DATABASE: ${DB_DATABASE}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-      QUEUE_CONNECTION: database
-    env_file:
-      - .env
+      <<: *laravel-env
     depends_on:
-      db:
-        condition: service_healthy
       app:
-        condition: service_started
-    command: >
-      bash -lc "while [ ! -f vendor/autoload.php ]; do sleep 2; done; while [ ! -f storage/framework/.migrated ]; do sleep 2; done; while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - supervisorctl -c /etc/supervisor/conf.d/scheduler.conf status | grep -q RUNNING
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - dev
+      - prod
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - dev
+      - prod
 
   db:
     image: mysql:8.0
     restart: unless-stopped
-    ports:
-      - "3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_DATABASE}
-      MYSQL_USER: ${DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_DATABASE: ${DB_DATABASE:-monotickets}
+      MYSQL_USER: ${DB_USERNAME:-monotickets}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+    command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - -h
+        - localhost
       interval: 10s
       timeout: 5s
       retries: 5
+    profiles:
+      - dev
+      - prod
+
+  frontend:
+    build:
+      context: frontend
+      target: runtime
+    image: monotickets-frontend
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+      VITE_FINGERPRINT_ENCRYPTION_KEY: ${VITE_FINGERPRINT_ENCRYPTION_KEY:-}
+      VITE_METRICS_URL: ${VITE_METRICS_URL:-}
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost/ > /dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - dev
+      - prod
 
 volumes:
   mysql_data:
+    driver: local

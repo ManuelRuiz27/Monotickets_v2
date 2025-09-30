@@ -1,8 +1,9 @@
 import nacl from 'tweetnacl';
 import { base64ToUint8Array, sha256HexFromString, uint8ArrayToBase64 } from './crypto';
+import { getRuntimeEnv } from './runtimeEnv';
 
 function getEncryptionKey(): Uint8Array {
-  const key = import.meta.env.VITE_FINGERPRINT_ENCRYPTION_KEY as string | undefined;
+  const key = getRuntimeEnv('VITE_FINGERPRINT_ENCRYPTION_KEY');
   if (!key) {
     throw new Error('No se configuró la clave de cifrado para el fingerprint.');
   }
