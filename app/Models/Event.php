@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Attendance;
 use App\Models\Scopes\TenantScope;
+use App\Models\Ticket;
 use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -12,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -111,6 +114,47 @@ class Event extends Model
     public function scopeForTenant(Builder $query, string $tenantId): Builder
     {
         return $query->where('tenant_id', $tenantId);
+    }
+
+    /**
+     * Scope the query to include occupancy metrics without incurring N+1 queries.
+     */
+    public function scopeWithOccupancyMetrics(Builder $query): Builder
+    {
+        if ($query->getQuery()->columns === null) {
+            $query->select('events.*');
+        }
+
+        $attendanceMetrics = Attendance::query()
+            ->select([
+                'event_id',
+                DB::raw('count(*) as valid_attendances'),
+                DB::raw('count(distinct ticket_id) as unique_tickets'),
+            ])
+            ->where('result', 'valid')
+            ->whereNull('deleted_at')
+            ->groupBy('event_id');
+
+        $ticketMetrics = Ticket::query()
+            ->select([
+                'event_id',
+                DB::raw('count(*) as issued_tickets'),
+            ])
+            ->whereNull('deleted_at')
+            ->groupBy('event_id');
+
+        return $query
+            ->leftJoinSub($attendanceMetrics, 'attendance_metrics', function ($join): void {
+                $join->on('attendance_metrics.event_id', '=', 'events.id');
+            })
+            ->leftJoinSub($ticketMetrics, 'ticket_metrics', function ($join): void {
+                $join->on('ticket_metrics.event_id', '=', 'events.id');
+            })
+            ->addSelect([
+                DB::raw('coalesce(attendance_metrics.valid_attendances, 0) as attendances_count'),
+                DB::raw('coalesce(attendance_metrics.unique_tickets, 0) as capacity_used'),
+                DB::raw('coalesce(ticket_metrics.issued_tickets, 0) as tickets_issued'),
+            ]);
     }
 
     /**

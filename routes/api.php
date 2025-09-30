@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\Billing\BillingController;
 use App\Http\Controllers\CheckpointController;
 use App\Http\Controllers\DeviceController;
+use App\Http\Controllers\EventAnalyticsController;
 use App\Http\Controllers\EventAttendanceController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventDashboardController;
@@ -119,6 +120,7 @@ Route::middleware('api')->group(function (): void {
                 ->middleware('limits:event.create')
                 ->name('events.store');
             Route::get('{event_id}', [EventController::class, 'show'])->name('events.show');
+            Route::get('{event_id}/analytics', [EventAnalyticsController::class, 'show'])->name('events.analytics.show');
             Route::patch('{event_id}', [EventController::class, 'update'])->name('events.update');
             Route::delete('{event_id}', [EventController::class, 'destroy'])->name('events.destroy');
 
@@ -230,6 +232,9 @@ Route::middleware('api')->group(function (): void {
         Route::post('scan/batch', [ScanController::class, 'batch'])
             ->middleware('throttle:scan-device')
             ->name('scan.batch');
+        Route::post('scans/sync', [ScanController::class, 'sync'])
+            ->middleware('throttle:scan-device')
+            ->name('scan.sync');
     });
 
     Route::middleware(['auth:api', 'role:superadmin,tenant_owner'])

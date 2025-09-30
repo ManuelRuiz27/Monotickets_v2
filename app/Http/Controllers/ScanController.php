@@ -258,6 +258,182 @@ class ScanController extends Controller
     }
 
     /**
+     * Sync a batch of scans ensuring idempotency within the payload.
+     */
+    public function sync(Request $request): JsonResponse
+    {
+        /** @var User $authUser */
+        $authUser = $request->user();
+
+        $validated = $this->validate($request, [
+            'scans' => ['required', 'array', 'min:1'],
+            'scans.*.qr_code' => ['required', 'string'],
+            'scans.*.checkpoint_id' => ['nullable', 'uuid'],
+            'scans.*.device_id' => ['nullable', 'string', 'max:255'],
+            'scans.*.scanned_at' => ['required', 'date'],
+            'scans.*.offline' => ['sometimes', 'boolean'],
+            'scans.*.event_id' => ['nullable', 'uuid'],
+        ]);
+
+        $deduped = [];
+
+        foreach ($validated['scans'] as $index => $scan) {
+            $key = $this->buildSyncKey($scan);
+
+            if (! array_key_exists($key, $deduped)) {
+                $deduped[$key] = [
+                    'index' => $index,
+                    'payload' => $scan,
+                    'duplicates' => [],
+                ];
+
+                continue;
+            }
+
+            $deduped[$key]['duplicates'][] = $index;
+        }
+
+        $scans = array_values($deduped);
+
+        usort($scans, static function (array $left, array $right): int {
+            $leftTime = CarbonImmutable::parse((string) $left['payload']['scanned_at']);
+            $rightTime = CarbonImmutable::parse((string) $right['payload']['scanned_at']);
+
+            return $leftTime <=> $rightTime;
+        });
+
+        $responses = [];
+        $summary = [
+            'valid' => 0,
+            'duplicate' => 0,
+            'errors' => 0,
+            'deduplicated' => 0,
+        ];
+
+        foreach ($scans as $scan) {
+            $index = $scan['index'];
+            $payload = $scan['payload'];
+            $startedAt = microtime(true);
+
+            try {
+                $result = $this->handleScan($request, $authUser, $payload, true, $startedAt);
+            } catch (HttpExceptionInterface $exception) {
+                if ($this->isDatabaseTimeoutException($exception)) {
+                    return response()->json(['error' => self::TRY_AGAIN_MESSAGE], 503);
+                }
+
+                $responses[] = [
+                    'index' => $index,
+                    'status' => $exception->getStatusCode(),
+                    'result' => 'error',
+                    'message' => $exception->getMessage(),
+                    'reason' => 'hostess_assignment_missing',
+                ];
+
+                ++$summary['errors'];
+
+                continue;
+            }
+
+            if ($result === null) {
+                $response = array_merge([
+                    'index' => $index,
+                ], $this->formatUnknownQrResponse((string) $payload['qr_code']));
+
+                $responses[] = $response;
+                ++$summary['errors'];
+
+                $latencyMs = $this->calculateLatencyMs($startedAt);
+
+                $this->logScanStructured(
+                    $request,
+                    $authUser,
+                    null,
+                    null,
+                    null,
+                    'invalid',
+                    $latencyMs,
+                    $payload['device_id'] ?? null,
+                    [
+                        'qr_code' => (string) $payload['qr_code'],
+                        'reason' => 'qr_not_found',
+                        'batch_index' => $index,
+                    ]
+                );
+
+                $this->recordScanErrorMetric($request, $authUser, $payload);
+
+                $tenantContext = $this->resolveTenantContext($request, $authUser) ?? 'unknown';
+
+                $this->logLifecycleMetric(
+                    $request,
+                    $authUser,
+                    'scan_invalid',
+                    'scan',
+                    (string) $payload['qr_code'],
+                    (string) $tenantContext,
+                    [
+                        'result' => 'invalid',
+                        'reason' => 'qr_not_found',
+                        'batch_index' => $index,
+                    ]
+                );
+
+                continue;
+            }
+
+            $responses[] = array_merge(['index' => $index], $result);
+
+            if ($result['result'] === 'valid') {
+                ++$summary['valid'];
+            } elseif ($result['result'] === 'duplicate') {
+                ++$summary['duplicate'];
+            } else {
+                ++$summary['errors'];
+            }
+
+            foreach ($scan['duplicates'] as $duplicateIndex) {
+                ++$summary['deduplicated'];
+
+                $responses[] = [
+                    'index' => $duplicateIndex,
+                    'result' => 'ignored',
+                    'reason' => 'duplicate_payload',
+                    'message' => 'Scan ignored because an identical payload was already processed.',
+                    'deduplicated_with' => $index,
+                ];
+            }
+        }
+
+        usort($responses, static fn (array $left, array $right): int => $left['index'] <=> $right['index']);
+
+        $tenantContext = $this->resolveTenantContext($request, $authUser);
+
+        $this->recordAuditLog(
+            $authUser,
+            $request,
+            'scan_sync',
+            (string) $authUser->id,
+            'sync_batch_processed',
+            [
+                'summary' => $summary,
+                'total_received' => count($validated['scans']),
+                'processed_scans' => count($scans),
+            ],
+            $tenantContext
+        );
+
+        return response()->json([
+            'data' => $responses,
+            'meta' => [
+                'summary' => $summary,
+                'total_scans' => count($validated['scans']),
+                'processed_scans' => count($scans),
+            ],
+        ], 207);
+    }
+
+    /**
      * Handle the scan workflow, returning the API payload for the client.
      *
      * @param  array<string, mixed>  $payload
@@ -1047,5 +1223,17 @@ class ScanController extends Controller
             'ticket' => null,
             'attendance' => null,
         ];
+    }
+
+    /**
+     * Build a stable idempotency key for the provided scan payload.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function buildSyncKey(array $payload): string
+    {
+        $timestamp = CarbonImmutable::parse((string) $payload['scanned_at'])->toIso8601String();
+
+        return sprintf('%s|%s', (string) $payload['qr_code'], $timestamp);
     }
 }
