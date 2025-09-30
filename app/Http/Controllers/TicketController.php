@@ -417,27 +417,8 @@ class TicketController extends Controller
     private function locateGuest(Request $request, User $authUser, string $guestId): ?Guest
     {
         $query = Guest::query()->with('event')->whereKey($guestId);
-        $tenantId = $this->resolveTenantContext($request, $authUser);
 
-        if ($this->isSuperAdmin($authUser)) {
-            if ($tenantId !== null) {
-                $query->whereHas('event', function (Builder $builder) use ($tenantId): void {
-                    $builder->where('tenant_id', $tenantId);
-                });
-            }
-        } else {
-            if ($tenantId === null) {
-                $this->throwValidationException([
-                    'tenant_id' => ['Unable to determine tenant context.'],
-                ]);
-            }
-
-            $query->whereHas('event', function (Builder $builder) use ($tenantId): void {
-                $builder->where('tenant_id', $tenantId);
-            });
-        }
-
-        return $query->first();
+        return $this->applyTenantScope($query, $request, $authUser, 'event')->first();
     }
 
     /**
@@ -447,27 +428,52 @@ class TicketController extends Controller
     {
         $ticketId = $ticket_id;
         $query = Ticket::query()->with(['event', 'guest'])->whereKey($ticketId);
+
+        return $this->applyTenantScope($query, $request, $authUser, 'event')->first();
+    }
+
+    /**
+     * Apply tenant visibility rules to the provided query.
+     *
+     * @template TModel of \Illuminate\Database\Eloquent\Model
+     *
+     * @param  Builder<TModel>  $query
+     *
+     * @return Builder<TModel>
+     */
+    private function applyTenantScope(Builder $query, Request $request, User $authUser, string $relation): Builder
+    {
         $tenantId = $this->resolveTenantContext($request, $authUser);
 
         if ($this->isSuperAdmin($authUser)) {
-            if ($tenantId !== null) {
-                $query->whereHas('event', function (Builder $builder) use ($tenantId): void {
-                    $builder->where('tenant_id', $tenantId);
-                });
-            }
-        } else {
-            if ($tenantId === null) {
-                $this->throwValidationException([
-                    'tenant_id' => ['Unable to determine tenant context.'],
-                ]);
-            }
-
-            $query->whereHas('event', function (Builder $builder) use ($tenantId): void {
-                $builder->where('tenant_id', $tenantId);
-            });
+            return $tenantId === null
+                ? $query
+                : $this->restrictByTenant($query, $relation, $tenantId);
         }
 
-        return $query->first();
+        if ($tenantId === null) {
+            $this->throwValidationException([
+                'tenant_id' => ['Unable to determine tenant context.'],
+            ]);
+        }
+
+        return $this->restrictByTenant($query, $relation, (string) $tenantId);
+    }
+
+    /**
+     * Constrain the query to models related to the provided tenant.
+     *
+     * @template TModel of \Illuminate\Database\Eloquent\Model
+     *
+     * @param  Builder<TModel>  $query
+     *
+     * @return Builder<TModel>
+     */
+    private function restrictByTenant(Builder $query, string $relation, string $tenantId): Builder
+    {
+        return $query->whereHas($relation, function (Builder $builder) use ($tenantId): void {
+            $builder->where('tenant_id', $tenantId);
+        });
     }
 
     /**
