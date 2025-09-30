@@ -33,6 +33,10 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($identifier);
         });
 
+        RateLimiter::for('auth-generic', function (Request $request): Limit {
+            return Limit::perMinute(60)->by($request->ip());
+        });
+
         RateLimiter::for('auth-forgot', function (Request $request): Limit {
             $email = (string) $request->input('email');
             $identifier = $request->ip() . '|' . ($email !== '' ? strtolower($email) : 'guest');

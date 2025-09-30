@@ -33,14 +33,21 @@ class ApiResponse
      *
      * @param  array<string, mixed>|null  $details
      */
-    public static function error(string $code, string $message, ?array $details, int $status): JsonResponse
+    public static function error(string $code, string $message, ?array $details, int $status, ?string $traceId = null): JsonResponse
     {
-        return response()->json([
-            'error' => array_filter([
-                'code' => $code,
-                'message' => $message,
-                'details' => $details,
-            ], static fn ($value) => $value !== null),
-        ], $status);
+        $payload = [
+            'code' => $code,
+            'message' => $message,
+        ];
+
+        if ($details !== null) {
+            $payload['details'] = $details;
+        }
+
+        if ($traceId !== null) {
+            $payload['traceId'] = $traceId;
+        }
+
+        return response()->json($payload, $status);
     }
 }
