@@ -1,0 +1,28 @@
+services:
+  app:
+    build:
+      target: development
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      LOG_LEVEL: debug
+
+  queue:
+    build:
+      target: development
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      LOG_LEVEL: debug
+
+  scheduler:
+    build:
+      target: development
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      LOG_LEVEL: debug
+
+  frontend:
+    environment:
+      VITE_API_URL: '${VITE_API_URL:-http://localhost:8080}'

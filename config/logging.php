@@ -8,8 +8,22 @@ return [
     'channels' => [
         'stack' => [
             'driver' => 'stack',
-            'channels' => ['daily'],
+            'channels' => ['stdout'],
             'ignore_exceptions' => false,
+        ],
+
+        'stdout' => [
+            'driver' => 'stream',
+            'stream' => 'php://stdout',
+            'level' => env('LOG_LEVEL', 'debug'),
+            'tap' => [
+                App\Logging\RequestContextTap::class,
+            ],
+            'formatter' => JsonFormatter::class,
+            'formatter_with' => [
+                'batchMode' => JsonFormatter::BATCH_MODE_NEWLINES,
+                'appendNewline' => true,
+            ],
         ],
 
         'daily' => [

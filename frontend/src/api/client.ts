@@ -1,6 +1,7 @@
 import { useAuthStore } from '../auth/store';
+import { getRuntimeEnv } from '../utils/runtimeEnv';
 
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+const API_URL = (getRuntimeEnv('VITE_API_URL') ?? '').replace(/\/$/, '');
 
 export class ApiError extends Error {
   status: number;

@@ -1,4 +1,5 @@
 import { resolveApiUrl } from '../api/client';
+import { getRuntimeEnv } from '../utils/runtimeEnv';
 
 type NumericMetric = 'scanLatencyMs' | 'batchSize' | 'retries' | 'cameraFps';
 
@@ -46,7 +47,7 @@ const numericAggregates: Record<NumericMetric, MetricAggregate> = {
 
 const rateAggregate: RateAggregate = { success: 0, total: 0 };
 
-const METRICS_ENDPOINT = (import.meta.env.VITE_METRICS_URL as string | undefined)?.trim();
+const METRICS_ENDPOINT = getRuntimeEnv('VITE_METRICS_URL')?.trim();
 
 let schedulerInitialized = false;
 let intervalId: number | null = null;
