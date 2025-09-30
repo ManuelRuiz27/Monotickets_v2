@@ -1,4 +1,5 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Button as MuiButton, Chip, CircularProgress } from '@mui/material';
 import { fetchHostessAssignments, registerHostessDevice } from '../api/hostess';
 import EventTotalsPanel from '../components/hostess/EventTotalsPanel';
 import QrScanner from '../components/scans/QrScanner';
@@ -12,6 +13,7 @@ import {
   resolveDevicePlatform,
 } from '../utils/fingerprint';
 import {
+  attemptSync,
   subscribeToSyncEvents,
   useAttendanceHistory,
   usePendingQueueCount,
@@ -67,6 +69,10 @@ const Hostess = () => {
   const [pinError, setPinError] = useState<string | null>(null);
   const [unlockPin, setUnlockPin] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const [isSyncingNow, setIsSyncingNow] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
 
   const assignments = useHostessStore((state) => state.assignments);
   const currentEvent = useHostessStore((state) => state.currentEvent);
@@ -165,7 +171,69 @@ const Hostess = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const updateStatus = () => {
+      setIsOnline(window.navigator.onLine);
+    };
+
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+
+    return () => {
+      window.removeEventListener('online', updateStatus);
+      window.removeEventListener('offline', updateStatus);
+    };
+  }, []);
+
   const dismissDuplicateBanner = () => setDuplicateBanner(null);
+
+  const handleSyncNow = useCallback(async () => {
+    setIsSyncingNow(true);
+    setSyncError(null);
+    try {
+      const result = await attemptSync({ eventId: currentEvent?.id ?? null, forceReconciliation: true });
+      if (result.performed) {
+        setLastSyncAt(new Date().toISOString());
+        if (result.duplicates.length > 0) {
+          const duplicatesMessage =
+            result.duplicates.length === 1
+              ? 'Se detectó un duplicado durante la sincronización manual.'
+              : `Se detectaron ${result.duplicates.length} duplicados durante la sincronización manual.`;
+          setDuplicateBanner(maskSensitiveText(duplicatesMessage));
+        }
+      } else {
+        setLastSyncAt(new Date().toISOString());
+      }
+    } catch (error) {
+      setSyncError(extractApiErrorMessage(error, 'No se pudo sincronizar los escaneos pendientes.'));
+    } finally {
+      setIsSyncingNow(false);
+    }
+  }, [currentEvent?.id]);
+
+  const formattedLastSync = useMemo(() => {
+    if (!lastSyncAt) {
+      return null;
+    }
+
+    const date = new Date(lastSyncAt);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    try {
+      return new Intl.DateTimeFormat('es-MX', {
+        dateStyle: 'short',
+        timeStyle: 'medium',
+      }).format(date);
+    } catch {
+      return date.toLocaleString();
+    }
+  }, [lastSyncAt]);
 
   const events = useMemo((): HostessEvent[] => {
     const map = new Map<string, HostessEvent>();
@@ -673,6 +741,31 @@ const Hostess = () => {
               Cerrar
             </button>
           </div>
+        )}
+        <div className="sync-status" role="status" aria-live="polite">
+          <Chip
+            label={isOnline ? 'En línea' : 'Sin conexión'}
+            color={isOnline ? 'success' : 'warning'}
+            variant={isOnline ? 'outlined' : 'filled'}
+            size="small"
+          />
+          <MuiButton
+            variant="contained"
+            size="small"
+            onClick={handleSyncNow}
+            disabled={isSyncingNow || !isOnline}
+            startIcon={isSyncingNow ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
+            Sincronizar ahora
+          </MuiButton>
+          {formattedLastSync && (
+            <span className="sync-status__timestamp">Última sincronización: {formattedLastSync}</span>
+          )}
+        </div>
+        {syncError && (
+          <Alert severity="error" onClose={() => setSyncError(null)} className="sync-status__alert">
+            {syncError}
+          </Alert>
         )}
         {!device && <p>Registra este dispositivo para habilitar el escaneo.</p>}
         {!currentEvent && <p>Selecciona un evento para comenzar a escanear.</p>}

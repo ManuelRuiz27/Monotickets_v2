@@ -29,6 +29,7 @@ import {
   Toolbar,
   Tooltip,
   Typography,
+  LinearProgress,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import AddIcon from '@mui/icons-material/Add';
@@ -76,11 +77,58 @@ const formatCapacity = (capacity: number | null | undefined) => {
   return capacity.toLocaleString();
 };
 
-const formatOccupancy = (capacity: number | null | undefined) => {
-  if (capacity === null || capacity === undefined) {
-    return '—';
+const resolveOccupancyRatio = (event: EventResource): number | null => {
+  const ratio = event.occupancy_percent ??
+    (event.capacity !== null && event.capacity !== undefined && event.capacity > 0 && event.capacity_used !== undefined
+      ? event.capacity_used / event.capacity
+      : null);
+
+  if (ratio === null || ratio === undefined || Number.isNaN(ratio)) {
+    return null;
   }
-  return '0%';
+
+  return Math.max(0, ratio);
+};
+
+const resolveUsageTotals = (event: EventResource): { used: number | null; capacity: number | null } => {
+  const capacity = event.capacity ?? null;
+  const used = event.capacity_used ?? event.attendances_count ?? null;
+  return { used, capacity };
+};
+
+const formatOccupancyLabel = (event: EventResource): string => {
+  const ratio = resolveOccupancyRatio(event);
+  const percent = ratio !== null ? Math.min(100, Math.round(ratio * 100)) : null;
+  const { used, capacity } = resolveUsageTotals(event);
+
+  if (percent === null) {
+    if (used !== null) {
+      return `${used.toLocaleString()} asistentes registrados`;
+    }
+    return 'Sin datos suficientes';
+  }
+
+  if (capacity && used !== null) {
+    return `${percent}% (${used.toLocaleString()} de ${capacity.toLocaleString()} lugares)`;
+  }
+
+  return `${percent}% de ocupación estimada`;
+};
+
+const resolveOccupancyColor = (ratio: number | null): 'primary' | 'success' | 'warning' | 'error' => {
+  if (ratio === null) {
+    return 'primary';
+  }
+
+  if (ratio < 0.6) {
+    return 'success';
+  }
+
+  if (ratio < 0.85) {
+    return 'warning';
+  }
+
+  return 'error';
 };
 
 const orderEvents = (events: EventResource[], order: OrderState) => {
@@ -355,7 +403,37 @@ const EventsList = () => {
                           <EventStatusChip status={event.status} />
                         </TableCell>
                         <TableCell>{formatCapacity(event.capacity)}</TableCell>
-                        <TableCell>{formatOccupancy(event.capacity)}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            const ratio = resolveOccupancyRatio(event);
+                            const percent = ratio !== null ? Math.min(100, Math.round(ratio * 100)) : null;
+                            const label = formatOccupancyLabel(event);
+                            const color = resolveOccupancyColor(ratio);
+
+                            if (percent === null) {
+                              return (
+                                <Typography variant="body2" color="text.secondary" aria-label={`Ocupación sin datos para ${event.name}`}>
+                                  {label}
+                                </Typography>
+                              );
+                            }
+
+                            return (
+                              <Stack spacing={0.75} aria-label={`Ocupación del evento ${event.name}`}>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={percent}
+                                  color={color}
+                                  sx={{ height: 8, borderRadius: 8, bgcolor: 'action.selected' }}
+                                  aria-hidden
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                  {label}
+                                </Typography>
+                              </Stack>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell align="right">
                           <Tooltip title="Ver detalle">
                             <span>
