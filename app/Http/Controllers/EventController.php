@@ -47,7 +47,7 @@ class EventController extends Controller
         $authUser = $request->user();
         $filters = $request->validated();
 
-        $query = Event::query();
+        $query = Event::query()->withOccupancyMetrics();
 
         $tenantId = $this->resolveTenantContext($request, $authUser);
 
@@ -191,8 +191,13 @@ class EventController extends Controller
             (string) $event->tenant_id
         );
 
+        $eventWithMetrics = Event::query()
+            ->withOccupancyMetrics()
+            ->whereKey($event->id)
+            ->first();
+
         return response()->json([
-            'data' => $this->formatEvent($event),
+            'data' => $this->formatEvent($eventWithMetrics ?? $event),
         ], 201);
     }
 
@@ -210,8 +215,13 @@ class EventController extends Controller
             return ApiResponse::error('NOT_FOUND', 'The requested resource was not found.', null, 404);
         }
 
+        $eventWithMetrics = Event::query()
+            ->withOccupancyMetrics()
+            ->whereKey($event->id)
+            ->first();
+
         return response()->json([
-            'data' => $this->formatEvent($event),
+            'data' => $this->formatEvent($eventWithMetrics ?? $event),
         ]);
     }
 
@@ -439,7 +449,9 @@ class EventController extends Controller
     private function locateEvent(Request $request, User $authUser, string $event_id): ?Event
     {
         $eventId = $event_id;
-        $query = Event::query()->whereKey($eventId);
+        $query = Event::query()
+            ->withOccupancyMetrics()
+            ->whereKey($eventId);
         $tenantId = $this->resolveTenantContext($request, $authUser);
 
         if ($this->isSuperAdmin($authUser)) {
@@ -464,8 +476,23 @@ class EventController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function formatEvent(Event $event): array
+    private function formatEvent(?Event $event): array
     {
+        if ($event === null) {
+            return [];
+        }
+
+        $attendancesCount = (int) ($event->getAttribute('attendances_count') ?? 0);
+        $ticketsIssued = (int) ($event->getAttribute('tickets_issued') ?? 0);
+        $capacityUsed = (int) ($event->getAttribute('capacity_used') ?? 0);
+        $capacity = $event->capacity;
+
+        $occupancyPercent = null;
+
+        if ($capacity !== null && (int) $capacity > 0) {
+            $occupancyPercent = $capacityUsed / (int) $capacity;
+        }
+
         return [
             'id' => $event->id,
             'tenant_id' => $event->tenant_id,
@@ -482,6 +509,10 @@ class EventController extends Controller
             'settings_json' => $event->settings_json,
             'created_at' => optional($event->created_at)->toISOString(),
             'updated_at' => optional($event->updated_at)->toISOString(),
+            'attendances_count' => $attendancesCount,
+            'tickets_issued' => $ticketsIssued,
+            'capacity_used' => $capacityUsed,
+            'occupancy_percent' => $occupancyPercent,
         ];
     }
 
