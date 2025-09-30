@@ -9,7 +9,28 @@ on:
   pull_request:
 
 jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+
+      - name: Install npm dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Validate OpenAPI specification
+        run: npm run openapi:validate
+
   build:
+    needs: docs
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -23,7 +44,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          coverage: none
+          coverage: xdebug
           extensions: mbstring, dom, fileinfo, sqlite3
           ini-values: error_reporting=E_ALL, display_errors=On
 
@@ -55,14 +76,30 @@ jobs:
           npm install --no-audit --no-fund
           npm install --prefix frontend --no-audit --no-fund
 
+      - name: Prepare storage directory
+        run: mkdir -p storage/logs
+
       - name: Run linters
         run: npm run lint
 
       - name: Type check frontend
         run: npm run typecheck
 
-      - name: Validate OpenAPI specification
-        run: npm run openapi:validate
-
       - name: Run PHP unit tests
         run: composer test
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: php-coverage
+          path: storage/logs/coverage.xml
+          if-no-files-found: warn
+
+      - name: Publish coverage summary
+        if: always()
+        run: |
+          if [ -f storage/logs/coverage.xml ]; then
+            php -r "\$xml = simplexml_load_file('storage/logs/coverage.xml'); \$metrics = \$xml->project->metrics; \$covered = (int) \$metrics['coveredstatements']; \$total = (int) \$metrics['statements']; \$pct = \$total ? (\$covered / \$total) * 100 : 0; \$summary = sprintf(\"### PHP Coverage\\n- Line coverage: %.2f%% (%d/%d líneas cubiertas)\\n\", \$pct, \$covered, \$total); file_put_contents('storage/logs/coverage-summary.md', \$summary);";
+            cat storage/logs/coverage-summary.md >> "$GITHUB_STEP_SUMMARY";
+          fi

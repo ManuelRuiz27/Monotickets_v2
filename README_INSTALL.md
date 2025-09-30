@@ -9,6 +9,29 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
 
 ---
 
+## Variables de entorno esenciales
+
+Configura los siguientes valores antes de levantar los contenedores. Las claves se comparten entre backend y frontend para mantener la sincronización del contrato.
+
+| Variable | Ubicación | Descripción |
+| --- | --- | --- |
+| `APP_KEY` | `.env` | Clave de cifrado de Laravel. Genera una nueva con `php -r "echo bin2hex(random_bytes(32));"`. |
+| `JWT_SECRET` | `.env` | Secreto utilizado para firmar los JWT emitidos por la API. Debe coincidir en todos los pods. |
+| `FINGERPRINT_ENCRYPTION_KEY` | `.env` y `frontend/.env` | Clave simétrica base64 para cifrar huellas de dispositivos y navegadores. |
+| `VITE_API_URL` | `frontend/.env` | URL pública del backend, por defecto `http://localhost:8000/api`. |
+
+Las migraciones de ejemplo incluyen usuarios demo con las siguientes credenciales:
+
+| Rol | Usuario | Contraseña |
+| --- | --- | --- |
+| Superadmin | `superadmin@demo.test` | `DemoPassword123!` |
+| Organizer | `organizer1@demo.test` | `DemoPassword123!` |
+| Organizer | `organizer2@demo.test` | `DemoPassword123!` |
+| Hostess | `hostess@demo.test` | `DemoPassword123!` |
+| Tenant Owner | `owner@demo.test` | `DemoPassword123!` |
+
+---
+
 ## 1. Windows 11 + Docker Desktop
 
 ### 1.1. Requisitos previos
@@ -65,6 +88,8 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
    ```
 5. Las migraciones incluyen las tablas para colas (`jobs` y `failed_jobs`). Tras sembrar la base deberías poder revisar la API en `http://localhost:8000`.
 
+6. Para acceder a la documentación interactiva en desarrollo abre `http://localhost:8000/docs` o ejecuta `npm run docs:preview`.
+
 ### 1.5. Poner en marcha el frontend
 
 1. Copiar el archivo de entorno de ejemplo del frontend:
@@ -94,6 +119,18 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
 - Ejecutar pruebas:
   ```powershell
   docker compose exec app php artisan test
+  ```
+- Reporte de cobertura (mínimo 80%):
+  ```powershell
+  docker compose exec app composer test
+  ```
+- Validar contrato OpenAPI:
+  ```powershell
+  docker compose exec app npm run openapi:validate
+  ```
+- Previsualizar la documentación (Swagger/Redoc):
+  ```powershell
+  npm run docs:preview
   ```
 - Revisar logs de la aplicación:
   ```powershell
@@ -180,15 +217,29 @@ En ambos casos se asume que se utilizará Docker como motor de ejecución de ser
    docker compose ps
    ```
 5. Consultar logs:
-   ```bash
-   docker compose logs -f app
-   ```
+  ```bash
+  docker compose logs -f app
+  ```
+
+6. Documentación interactiva disponible en `http://localhost:8000/docs` o mediante `npm run docs:preview`.
 
 ### 2.5. Operaciones adicionales
 
 - Ejecutar pruebas automatizadas:
   ```bash
   docker compose exec app php artisan test
+  ```
+- Reporte de cobertura (`>=80%`):
+  ```bash
+  docker compose exec app composer test
+  ```
+- Validar contrato OpenAPI:
+  ```bash
+  docker compose exec app npm run openapi:validate
+  ```
+- Previsualizar documentación local:
+  ```bash
+  npm run docs:preview
   ```
 - Detener los contenedores:
   ```bash

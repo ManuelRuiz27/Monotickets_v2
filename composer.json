@@ -26,7 +26,10 @@
         }
     },
     "scripts": {
-        "test": "vendor/bin/phpunit",
+        "test": [
+            "@php -r \"is_dir('storage/logs') || mkdir('storage/logs', 0777, true);\"",
+            "vendor/bin/phpunit --coverage-text --coverage-clover=storage/logs/coverage.xml"
+        ],
         "test:fast": "vendor/bin/phpunit --testsuite=Unit"
     },
     "minimum-stability": "stable",
