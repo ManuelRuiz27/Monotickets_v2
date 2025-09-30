@@ -84,6 +84,48 @@ class ScanSyncFeatureTest extends TestCase
         $this->assertSame(2, Attendance::query()->where('ticket_id', $ticket->id)->count());
     }
 
+    public function test_sync_reports_invalid_entries_for_unknown_qr_codes(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $organizer = $this->createOrganizer($tenant);
+        $hostess = $this->createHostess($tenant);
+
+        $event = Event::factory()->for($tenant)->create([
+            'organizer_user_id' => $organizer->id,
+            'status' => 'published',
+            'checkin_policy' => 'single',
+        ]);
+
+        $this->assignHostessToEvent($hostess, $event);
+
+        [, $qr] = $this->createTicketWithQr($event);
+
+        $payload = [
+            'scans' => [
+                [
+                    'qr_code' => $qr->code,
+                    'scanned_at' => CarbonImmutable::parse('2024-07-02T10:00:00Z')->toIso8601String(),
+                ],
+                [
+                    'qr_code' => 'MT-UNKNOWN-0000',
+                    'scanned_at' => CarbonImmutable::parse('2024-07-02T10:02:00Z')->toIso8601String(),
+                ],
+            ],
+        ];
+
+        $response = $this->actingAs($hostess, 'api')->postJson('/scans/sync', $payload);
+
+        $response->assertStatus(207);
+        $response->assertJsonPath('meta.summary.valid', 1);
+        $response->assertJsonPath('meta.summary.errors', 1);
+
+        $results = collect($response->json('data'));
+        $this->assertSame('valid', $results[0]['result']);
+        $this->assertSame('invalid', $results[1]['result']);
+        $this->assertSame('qr_not_found', $results[1]['reason']);
+        $this->assertSame('MT-UNKNOWN-0000', $results[1]['qr_code']);
+    }
+
     /**
      * @return array{Ticket, Qr}
      */

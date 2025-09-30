@@ -263,6 +263,146 @@ X-Tenant-ID: 01HZYME6EBF1G01PZ8C6E6CBR3
 
 **Respuesta 204** sin cuerpo.
 
+## Analytics y ocupación
+
+### Panel administrativo `/admin/analytics`
+
+Devuelve tarjetas con métricas resumidas por evento. Permite filtrar por `tenant_id` y por rango de fechas (`from`, `to`). Cada tarjeta incluye series horarias (`attendance`) y un resumen con el porcentaje de ocupación (`overview.occupancy_rate`).
+
+```http
+GET /admin/analytics?from=2024-07-01&to=2024-07-02 HTTP/1.1
+Host: api.monotickets.app
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**Respuesta 200 (fragmento)**
+
+```json
+{
+  "data": [
+    {
+      "event": {
+        "id": "01J0ABCDXYZ4567890MNOPQ12",
+        "tenant_id": "01HZYME6EBF1G01PZ8C6E6CBR3",
+        "name": "Fiesta de lanzamiento",
+        "start_at": "2024-07-01T18:00:00Z",
+        "end_at": "2024-07-02T01:00:00Z",
+        "timezone": "UTC",
+        "status": "published"
+      },
+      "overview": {
+        "invited": 120,
+        "confirmed": 95,
+        "attendances": 80,
+        "duplicates": 4,
+        "unique_attendees": 78,
+        "occupancy_rate": 0.78
+      },
+      "attendance": [
+        {"hour": "2024-07-01T19:00:00Z", "valid": 15, "duplicate": 1, "unique": 15}
+      ]
+    }
+  ],
+  "meta": {
+    "tenants": [
+      {"id": "01HZYME6EBF1G01PZ8C6E6CBR3", "name": "Demo Tenant", "slug": "demo-tenant"}
+    ]
+  }
+}
+```
+
+### Analytics por evento `/events/{event_id}/analytics`
+
+Entrega datasets paginados: serie horaria (`data.hourly`), totales por checkpoint (con `totals` y nombres de checkpoints), duplicados y errores. Usa paginación mediante parámetros `*_page` y `*_per_page`.
+
+```http
+GET /events/01J0ABCDXYZ4567890MNOPQ12/analytics?hour_per_page=12&duplicates_per_page=5 HTTP/1.1
+Host: api.monotickets.app
+Authorization: Bearer <ACCESS_TOKEN>
+X-Tenant-ID: 01HZYME6EBF1G01PZ8C6E6CBR3
+```
+
+**Respuesta 200 (fragmento)**
+
+```json
+{
+  "data": {
+    "hourly": {
+      "data": [
+        {"hour": "2024-07-01T19:00:00Z", "valid": 25, "duplicate": 2, "unique": 24}
+      ],
+      "meta": {"page": 1, "per_page": 12, "total": 24, "total_pages": 2}
+    },
+    "checkpoints": {
+      "data": [
+        {"checkpoint_id": "01J0CHKPT1234567890ABCDE", "name": "Acceso VIP", "valid": 40, "duplicate": 1, "invalid": 0}
+      ],
+      "meta": {"page": 1, "per_page": 10, "total": 3, "total_pages": 1},
+      "totals": {"valid": 80, "duplicate": 4, "invalid": 2}
+    }
+  }
+}
+```
+
+## Sincronización de escaneos offline
+
+### POST `/scans/sync`
+
+Permite enviar lotes deduplicados por `qr_code` + `scanned_at`. Devuelve un `status` HTTP `207` con el detalle por índice y un resumen agregado. Los resultados incluyen `ignored` cuando se omiten duplicados dentro del lote.
+
+```http
+POST /scans/sync HTTP/1.1
+Host: api.monotickets.app
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "scans": [
+    {"qr_code": "MT-AAA-1111", "scanned_at": "2024-07-01T20:00:00Z"},
+    {"qr_code": "MT-AAA-1111", "scanned_at": "2024-07-01T20:00:00Z"},
+    {"qr_code": "UNKNOWN", "scanned_at": "2024-07-01T20:05:00Z"}
+  ]
+}
+```
+
+**Respuesta 207 (fragmento)**
+
+```json
+{
+  "data": [
+    {"index": 0, "result": "valid", "ticket": {"id": "01TICKET123"}},
+    {"index": 1, "result": "ignored", "reason": "duplicate_payload", "deduplicated_with": 0},
+    {"index": 2, "result": "invalid", "reason": "qr_not_found", "message": "The QR code could not be resolved."}
+  ],
+  "meta": {
+    "summary": {"valid": 1, "duplicate": 1, "errors": 1, "deduplicated": 1},
+    "total_scans": 3,
+    "processed_scans": 2
+  }
+}
+```
+
+## Health check
+
+`GET /health` ejecuta comprobaciones contra base de datos, Redis y la cola configurada. Responde `200` cuando todos los servicios están en estado `ok`, o `503` con `status: degraded` cuando alguno falla.
+
+```http
+GET /health HTTP/1.1
+Host: api.monotickets.app
+```
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2024-07-01T21:00:00Z",
+  "checks": {
+    "database": {"status": "ok"},
+    "redis": {"status": "ok"},
+    "queue": {"status": "ok"}
+  }
+}
+```
+
 ## Errores comunes
 
 - **401 UNAUTHORIZED**

@@ -10,6 +10,7 @@
     "format": "npm --prefix frontend run format",
     "typecheck": "npm --prefix frontend run typecheck",
     "openapi:validate": "redocly lint docs/api/openapi_monotickets.yaml",
+    "docs:preview": "redocly preview-docs docs/api/openapi_monotickets.yaml",
     "test": "npm run test:php",
     "test:php": "composer test",
     "test:fast": "composer test:fast"
