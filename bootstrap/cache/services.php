@@ -17,19 +17,21 @@
     13 => 'Illuminate\\Pagination\\PaginationServiceProvider',
     14 => 'Illuminate\\Pipeline\\PipelineServiceProvider',
     15 => 'Illuminate\\Queue\\QueueServiceProvider',
-    16 => 'Illuminate\\Translation\\TranslationServiceProvider',
-    17 => 'Illuminate\\Session\\SessionServiceProvider',
-    18 => 'Illuminate\\Validation\\ValidationServiceProvider',
-    19 => 'Illuminate\\View\\ViewServiceProvider',
-    20 => 'Carbon\\Laravel\\ServiceProvider',
-    21 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
-    22 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    23 => 'Tymon\\JWTAuth\\Providers\\LaravelServiceProvider',
+    16 => 'Illuminate\\Redis\\RedisServiceProvider',
+    17 => 'Illuminate\\Translation\\TranslationServiceProvider',
+    18 => 'Illuminate\\Session\\SessionServiceProvider',
+    19 => 'Illuminate\\Validation\\ValidationServiceProvider',
+    20 => 'Illuminate\\View\\ViewServiceProvider',
+    21 => 'Carbon\\Laravel\\ServiceProvider',
+    22 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
+    23 => 'Termwind\\Laravel\\TermwindServiceProvider',
     24 => 'Tymon\\JWTAuth\\Providers\\LaravelServiceProvider',
-    25 => 'App\\Providers\\AuthServiceProvider',
-    26 => 'App\\Providers\\EventServiceProvider',
-    27 => 'App\\Providers\\AppServiceProvider',
-    28 => 'App\\Providers\\RouteServiceProvider',
+    25 => 'Tymon\\JWTAuth\\Providers\\LaravelServiceProvider',
+    26 => 'App\\Providers\\AuthServiceProvider',
+    27 => 'App\\Providers\\EventServiceProvider',
+    28 => 'App\\Providers\\AppServiceProvider',
+    29 => 'App\\Providers\\QrServiceProvider',
+    30 => 'App\\Providers\\RouteServiceProvider',
   ),
   'eager' => 
   array (
@@ -51,7 +53,8 @@
     15 => 'App\\Providers\\AuthServiceProvider',
     16 => 'App\\Providers\\EventServiceProvider',
     17 => 'App\\Providers\\AppServiceProvider',
-    18 => 'App\\Providers\\RouteServiceProvider',
+    18 => 'App\\Providers\\QrServiceProvider',
+    19 => 'App\\Providers\\RouteServiceProvider',
   ),
   'deferred' => 
   array (
@@ -194,6 +197,8 @@
     'queue.failer' => 'Illuminate\\Queue\\QueueServiceProvider',
     'queue.listener' => 'Illuminate\\Queue\\QueueServiceProvider',
     'queue.worker' => 'Illuminate\\Queue\\QueueServiceProvider',
+    'redis' => 'Illuminate\\Redis\\RedisServiceProvider',
+    'redis.connection' => 'Illuminate\\Redis\\RedisServiceProvider',
     'translator' => 'Illuminate\\Translation\\TranslationServiceProvider',
     'translation.loader' => 'Illuminate\\Translation\\TranslationServiceProvider',
     'validator' => 'Illuminate\\Validation\\ValidationServiceProvider',
@@ -224,6 +229,9 @@
     array (
     ),
     'Illuminate\\Queue\\QueueServiceProvider' => 
+    array (
+    ),
+    'Illuminate\\Redis\\RedisServiceProvider' => 
     array (
     ),
     'Illuminate\\Translation\\TranslationServiceProvider' => 

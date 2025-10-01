@@ -11,6 +11,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Qr\QrCodeProvider;
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -267,7 +268,7 @@ class DatabaseSeeder extends Seeder
 
     private function seedUpcomingEvent(Event $event, array $lists, QrCodeProvider $qrProvider): void
     {
-        $baseIssuedAt = $event->start_at->subDays(14);
+        $baseIssuedAt = CarbonImmutable::make($event->start_at)->subDays(14);
 
         for ($i = 1; $i <= 260; $i++) {
             $guest = Guest::create([
@@ -374,7 +375,7 @@ class DatabaseSeeder extends Seeder
 
     private function seedPastEvent(Event $event, array $lists, QrCodeProvider $qrProvider): void
     {
-        $baseIssuedAt = $event->start_at->subDays(25);
+        $baseIssuedAt = CarbonImmutable::make($event->start_at)->subDays(25);
 
         for ($i = 1; $i <= 180; $i++) {
             $guest = Guest::create([
@@ -488,8 +489,8 @@ class DatabaseSeeder extends Seeder
         Guest $guest,
         string $type,
         string $status,
-        CarbonImmutable $issuedAt,
-        ?CarbonImmutable $expiresAt,
+        DateTimeInterface $issuedAt,
+        ?DateTimeInterface $expiresAt,
         int $priceCents,
         QrCodeProvider $qrProvider
     ): Ticket {
@@ -510,8 +511,8 @@ class DatabaseSeeder extends Seeder
                 default => 'B',
             },
             'seat_code' => str_pad((string) $this->ticketSequence++, 4, '0', STR_PAD_LEFT),
-            'issued_at' => $issuedAt,
-            'expires_at' => $expiresAt,
+            'issued_at' => CarbonImmutable::make($issuedAt),
+            'expires_at' => $expiresAt ? CarbonImmutable::make($expiresAt) : null,
         ]);
 
         $generated = $qrProvider->generate($ticket);

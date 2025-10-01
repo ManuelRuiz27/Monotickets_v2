@@ -16,8 +16,8 @@ class ResetPasswordRequest extends ApiFormRequest
     {
         return [
             'email' => ['required', 'email:rfc', 'max:255'],
-            'token' => ['required', 'string', 'size:64'],
-            'password' => ['required', 'string', 'min:12', 'confirmed'],
+            'token' => ['required', 'string', 'min:6', 'max:120'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
         ];
     }
 }

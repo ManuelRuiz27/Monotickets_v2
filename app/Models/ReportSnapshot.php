@@ -23,6 +23,7 @@ class ReportSnapshot extends Model
         'event_id',
         'type',
         'params_json',
+        'params_hash',
         'result_json',
         'computed_at',
         'ttl_seconds',

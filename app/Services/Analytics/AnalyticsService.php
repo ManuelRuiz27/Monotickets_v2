@@ -33,8 +33,8 @@ class AnalyticsService
                 ->value('timezone')
         );
 
-        $fromHour = $this->normaliseDateBoundary($timezone, $from, true)?->startOfHour();
-        $toHour = $this->normaliseDateBoundary($timezone, $to, false)?->startOfHour();
+        $fromHour = $this->normaliseUtcBoundary($timezone, $from, true)?->startOfHour();
+        $toHour = $this->normaliseUtcBoundary($timezone, $to, false)?->startOfHour();
 
         $query = ActivityMetric::query()
             ->where('event_id', $eventId)
@@ -52,7 +52,7 @@ class AnalyticsService
             ->get()
             ->map(function (ActivityMetric $metric): array {
                 return [
-                    'date_hour' => optional($metric->date_hour)->toISOString(),
+                    'date_hour' => optional($metric->date_hour)?->toIso8601String(),
                     'invites_sent' => (int) $metric->invites_sent,
                     'rsvp_confirmed' => (int) $metric->rsvp_confirmed,
                     'scans_valid' => (int) $metric->scans_valid,
@@ -79,8 +79,8 @@ class AnalyticsService
 
         $timezone = $this->resolveTimezone($event?->timezone);
 
-        $fromBoundary = $this->normaliseDateBoundary($timezone, $from, true);
-        $toBoundary = $this->normaliseDateBoundary($timezone, $to, false);
+        $fromBoundary = $this->normaliseLocalBoundary($timezone, $from, true);
+        $toBoundary = $this->normaliseLocalBoundary($timezone, $to, false);
 
         $invited = Guest::query()
             ->where('event_id', $eventId)
@@ -177,8 +177,8 @@ class AnalyticsService
                 ->value('timezone')
         );
 
-        $fromBoundary = $this->normaliseDateBoundary($timezone, $from, true);
-        $toBoundary = $this->normaliseDateBoundary($timezone, $to, false);
+        $fromBoundary = $this->normaliseLocalBoundary($timezone, $from, true);
+        $toBoundary = $this->normaliseLocalBoundary($timezone, $to, false);
 
         $query = Attendance::query()
             ->select('checkpoint_id', 'result', DB::raw('count(*) as aggregate'))
@@ -304,7 +304,19 @@ class AnalyticsService
     /**
      * @param  DateTimeInterface|string|null  $value
      */
-    private function normaliseDateBoundary(string $timezone, DateTimeInterface|string|null $value, bool $isStart): ?CarbonImmutable
+    private function normaliseUtcBoundary(string $timezone, DateTimeInterface|string|null $value, bool $isStart): ?CarbonImmutable
+    {
+        $date = $this->makeBoundaryDate($timezone, $value, $isStart);
+
+        return $date?->setTimezone('UTC');
+    }
+
+    private function normaliseLocalBoundary(string $timezone, DateTimeInterface|string|null $value, bool $isStart): ?CarbonImmutable
+    {
+        return $this->makeBoundaryDate($timezone, $value, $isStart);
+    }
+
+    private function makeBoundaryDate(string $timezone, DateTimeInterface|string|null $value, bool $isStart): ?CarbonImmutable
     {
         if ($value === null) {
             return null;
@@ -324,11 +336,9 @@ class AnalyticsService
 
         $date = $date->setTimezone($timezone);
 
-        $date = $isStart
+        return $isStart
             ? $date->startOfMinute()
             : $date->endOfMinute();
-
-        return $date->setTimezone('UTC');
     }
 
     private function resolveTimezone(?string $timezone): string

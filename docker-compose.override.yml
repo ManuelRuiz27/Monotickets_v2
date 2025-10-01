@@ -6,6 +6,15 @@ services:
       APP_ENV: local
       APP_DEBUG: "true"
       LOG_LEVEL: debug
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          php -r "new PDO('mysql:host=' . getenv('DB_HOST') . ';port=' .
+          getenv('DB_PORT') . ';dbname=' . getenv('DB_DATABASE'),
+          getenv('DB_USERNAME'), getenv('DB_PASSWORD'));"
 
   queue:
     build:
@@ -14,6 +23,8 @@ services:
       APP_ENV: local
       APP_DEBUG: "true"
       LOG_LEVEL: debug
+      CACHE_STORE: file
+      SESSION_DRIVER: file
 
   scheduler:
     build:
@@ -22,6 +33,8 @@ services:
       APP_ENV: local
       APP_DEBUG: "true"
       LOG_LEVEL: debug
+      CACHE_STORE: file
+      SESSION_DRIVER: file
 
   frontend:
     environment:

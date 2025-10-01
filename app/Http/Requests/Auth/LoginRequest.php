@@ -18,7 +18,7 @@ class LoginRequest extends ApiFormRequest
     {
         return [
             'email' => ['required', 'email:rfc', 'max:255'],
-            'password' => ['required', 'string', 'min:12'],
+            'password' => ['required', 'string', 'min:6'],
         ];
     }
 }

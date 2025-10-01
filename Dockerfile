@@ -28,9 +28,16 @@ RUN apk add --no-cache \
         curl \
         supervisor \
         icu-data-full \
+        icu-libs \
+        libzip \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        oniguruma \
         tzdata \
         fontconfig \
-        ttf-dejavu
+        ttf-dejavu \
+        libstdc++
 
 RUN apk add --no-cache --virtual .build-deps \
         icu-dev \
@@ -48,6 +55,8 @@ RUN docker-php-ext-configure intl \
     && docker-php-ext-install intl pdo_mysql \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install gd zip \
+    && printf "\n" | pecl install redis \
+    && docker-php-ext-enable redis \
     && apk del .build-deps
 
 COPY docker/supervisor/ /etc/supervisor/conf.d/
@@ -67,6 +76,5 @@ RUN chown -R www-data:www-data storage bootstrap/cache
 FROM nginx:1.25-alpine AS nginx
 RUN apk add --no-cache curl
 RUN rm /etc/nginx/conf.d/default.conf
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 COPY --from=production /var/www/html/public /var/www/html/public
-

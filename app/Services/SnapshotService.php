@@ -10,6 +10,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use JsonException;
 
 /**
  * Handle caching of analytics calculations for dashboards.
@@ -48,6 +49,8 @@ class SnapshotService
         $ttlSeconds = is_numeric($ttlSeconds) ? max(0, (int) $ttlSeconds) : null;
 
         $normalisedParams = $this->normaliseParams(Arr::except($params, ['tenant_id', 'event_id', 'ttl']));
+        $encodedParams = $this->encodeParams($normalisedParams);
+        $paramsHash = $this->hashParams($encodedParams);
 
         $startedAt = microtime(true);
 
@@ -56,7 +59,7 @@ class SnapshotService
             ->where('tenant_id', $tenantId)
             ->where('event_id', $eventId)
             ->where('type', $type)
-            ->where('params_json', $normalisedParams)
+            ->where('params_hash', $paramsHash)
             ->first();
 
         if ($existing !== null && ! $existing->hasExpired()) {
@@ -82,12 +85,13 @@ class SnapshotService
 
         $this->logSnapshotTiming($tenantId, $eventId, $type, $startedAt, false);
 
-        DB::transaction(function () use (&$existing, $tenantId, $eventId, $type, $normalisedParams, $ttlSeconds, $result): void {
+        DB::transaction(function () use (&$existing, $tenantId, $eventId, $type, $encodedParams, $paramsHash, $ttlSeconds, $result): void {
             $payload = [
                 'tenant_id' => $tenantId,
                 'event_id' => $eventId,
                 'type' => $type,
-                'params_json' => $normalisedParams,
+                'params_json' => $encodedParams,
+                'params_hash' => $paramsHash,
                 'result_json' => $result,
                 'computed_at' => CarbonImmutable::now(),
                 'ttl_seconds' => $ttlSeconds,
@@ -158,6 +162,20 @@ class SnapshotService
         }
 
         return $params;
+    }
+
+    private function encodeParams(array $params): string
+    {
+        try {
+            return json_encode($params, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION);
+        } catch (JsonException $exception) {
+            throw new InvalidArgumentException('Unable to serialise snapshot parameters.', 0, $exception);
+        }
+    }
+
+    private function hashParams(string $encodedParams): string
+    {
+        return hash('sha256', $encodedParams);
     }
 
     /**
